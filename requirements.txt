@@ -1,0 +1,17 @@
+# RDRA Analyzer 依存パッケージ
+
+# ===== LLM =====
+anthropic>=0.40.0           # Anthropic SDK
+
+# ===== CLI =====
+typer[all]>=0.12.0          # CLIフレームワーク
+rich>=13.0.0                # リッチなターミナル出力
+
+# ===== E2Eテスト =====
+playwright>=1.49.0          # PlaywrightブラウザE2Eテスト
+
+# ===== ユーティリティ =====
+pydantic>=2.0.0             # データバリデーション・モデル
+python-dotenv>=1.0.0        # .envファイル読み込み
+aiofiles>=24.0.0            # 非同期ファイルI/O
+tenacity>=9.0.0             # リトライロジック
