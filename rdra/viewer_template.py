@@ -178,6 +178,8 @@ const VIEWS = [
   {{key:"policies",      label:"ビジネスポリシー", diagram:null}},
   {{key:"screens",        label:"画面",             diagram:null}},
   {{key:"actors",         label:"アクター",         diagram:null}},
+  {{key:"business",      label:"業務",             diagram:null}},
+  {{key:"actor_uc",      label:"アクター×UC",     diagram:null}},
   {{key:"cross_ref",     label:"エンティティ×UC",  diagram:null}},
 ];
 
@@ -259,6 +261,12 @@ function buildViewContent(v) {{
       break;
     case "actors":
       html += actorTable();
+      break;
+    case "business":
+      html += `<div class="matrix-wrap" id="business-view"></div>`;
+      break;
+    case "actor_uc":
+      html += `<div class="matrix-wrap" id="actor-uc-matrix"></div>`;
       break;
     case "cross_ref":
       html += `<div class="matrix-wrap" id="cross-matrix"></div>`;
@@ -352,6 +360,8 @@ function navigate(key) {{
   // Special views
   // scenarios: テーブルからシナリオIDクリックで詳細パネルに表示
   if(key==="states") initStateTabs();
+  if(key==="business") buildBusinessView();
+  if(key==="actor_uc") buildActorUcMatrix();
   if(key==="cross_ref") buildCrossRef();
 }}
 
@@ -500,6 +510,134 @@ function _routeToCrud(routes) {{
   }});
   return crud;
 }}
+function buildBusinessView() {{
+  const wrap = document.getElementById("business-view");
+  if(!wrap || wrap.children.length > 0) return;
+  const ucs = (DATA.usecases||[]);
+  const entities = (DATA.entities||[]);
+  // 1. エンティティごとにCUD操作を持つUCをグループ化 → UCグループ
+  const ucGroups = {{}};  // key: エンティティ名 → {{entity, ucs: [uc]}}
+  ucs.forEach(u => {{
+    const crud = _routeToCrud(u.related_routes);
+    const hasCUD = crud.has("C") || crud.has("U") || crud.has("D");
+    if(!hasCUD) return;
+    (u.related_entities||[]).forEach(en => {{
+      const entObj = entities.find(e => e.class_name===en || e.name===en);
+      const entityName = entObj ? entObj.name : en;
+      if(!ucGroups[entityName]) ucGroups[entityName] = {{entity: entityName, ucs: []}};
+      if(!ucGroups[entityName].ucs.find(x => x.id === u.id)) {{
+        ucGroups[entityName].ucs.push(u);
+      }}
+    }});
+  }});
+  // 2. アクター×UCグループ → 業務
+  const gyomuList = [];
+  const gyomuSet = new Set();
+  Object.values(ucGroups).forEach(grp => {{
+    const actorMap = {{}};
+    grp.ucs.forEach(u => {{
+      if(!actorMap[u.actor]) actorMap[u.actor] = [];
+      actorMap[u.actor].push(u);
+    }});
+    Object.entries(actorMap).forEach(([actor, ucList]) => {{
+      const gyomuKey = actor + "|" + grp.entity;
+      if(!gyomuSet.has(gyomuKey)) {{
+        gyomuSet.add(gyomuKey);
+        const crudSet = new Set();
+        ucList.forEach(u => {{
+          const crud = _routeToCrud(u.related_routes);
+          ["C","U","D"].forEach(c => {{ if(crud.has(c)) crudSet.add(c); }});
+        }});
+        gyomuList.push({{
+          actor: actor,
+          entity: grp.entity,
+          name: grp.entity + "管理",
+          ucs: ucList,
+          crud: crudSet,
+        }});
+      }}
+    }});
+  }});
+  // ソート: アクター → エンティティ
+  gyomuList.sort((a,b) => a.actor.localeCompare(b.actor) || a.entity.localeCompare(b.entity));
+  // 3. テーブル描画
+  const crudColors = {{C:"#2a9d8f",U:"#f4a261",D:"#e63946"}};
+  let html = `<p style="margin-bottom:12px;color:#666">業務 = アクター × UCグループ（エンティティに対するCUD操作を持つUCの集合）</p>`;
+  html += "<table class='data-table' id='business-tbl'><thead><tr>";
+  html += `<th onclick="sortTable('business-tbl',0)">業務名<span class="sort-arrow">&#9650;</span></th>`;
+  html += `<th onclick="sortTable('business-tbl',1)">アクター<span class="sort-arrow">&#9650;</span></th>`;
+  html += `<th onclick="sortTable('business-tbl',2)">対象エンティティ<span class="sort-arrow">&#9650;</span></th>`;
+  html += `<th>CUD</th><th>関連UC</th>`;
+  html += "</tr></thead><tbody>";
+  gyomuList.forEach(g => {{
+    const cudLabels = ["C","U","D"].filter(c=>g.crud.has(c))
+      .map(c=>`<span style="color:${{crudColors[c]}};font-weight:bold">${{c}}</span>`).join(" ");
+    const entObj = entities.find(e => e.name===g.entity);
+    const cls = entObj ? entObj.class_name : g.entity;
+    const ucLinks = g.ucs.map(u =>
+      `<span class="clickable" data-uc="${{u.id}}" style="font-size:0.85em">${{u.id}}</span>`
+    ).join(" ");
+    html += `<tr>`;
+    html += `<td><strong>${{g.name}}</strong></td>`;
+    html += `<td class="clickable" data-actor="${{g.actor}}" style="cursor:pointer;color:var(--accent)">${{g.actor}}</td>`;
+    html += `<td class="clickable" data-entity="${{cls}}" style="cursor:pointer;color:var(--accent)">${{g.entity}}</td>`;
+    html += `<td>${{cudLabels}}</td>`;
+    html += `<td>${{ucLinks}}</td>`;
+    html += `</tr>`;
+  }});
+  html += "</tbody></table>";
+  html += `<div style="margin-top:12px;font-size:13px">
+    <span style="color:${{crudColors.C}}">&#9632; C=Create</span>&nbsp;
+    <span style="color:${{crudColors.U}}">&#9632; U=Update</span>&nbsp;
+    <span style="color:${{crudColors.D}}">&#9632; D=Delete</span>&nbsp;
+    <span style="color:#999">※ Read のみのUCは業務に含まれません</span>
+  </div>`;
+  wrap.innerHTML = html;
+}}
+
+function buildActorUcMatrix() {{
+  const wrap = document.getElementById("actor-uc-matrix");
+  if(!wrap || wrap.children.length > 0) return;
+  const ucs = (DATA.usecases||[]);
+  // アクター一覧を収集
+  const actorSet = new Set();
+  ucs.forEach(u => {{ if(u.actor) actorSet.add(u.actor); }});
+  const actors = [...actorSet].sort();
+  // カテゴリ一覧を収集
+  const categorySet = new Set();
+  ucs.forEach(u => {{ if(u.category) categorySet.add(u.category); }});
+  const categories = [...categorySet].sort();
+  // アクター×カテゴリごとにUCをグループ化
+  const map = {{}};
+  ucs.forEach(u => {{
+    const key = (u.actor||"") + "|" + (u.category||"");
+    if(!map[key]) map[key] = [];
+    map[key].push(u);
+  }});
+  let html = "<table class='matrix-table'><thead><tr><th class='row-head'>アクター \\ カテゴリ</th>";
+  categories.forEach(cat => html += `<th>${{cat}}</th>`);
+  html += "</tr></thead><tbody>";
+  actors.forEach(actor => {{
+    html += "<tr>";
+    html += `<td class="row-head clickable-header" data-actor="${{actor}}" style="cursor:pointer">${{actor}}</td>`;
+    categories.forEach(cat => {{
+      const key = actor + "|" + cat;
+      const ucList = map[key] || [];
+      if(ucList.length > 0) {{
+        const labels = ucList.map(u =>
+          `<span class="clickable" data-uc="${{u.id}}" style="font-size:0.85em">${{u.id}}</span>`
+        ).join("<br>");
+        html += `<td class="check">${{labels}}</td>`;
+      }} else {{
+        html += `<td></td>`;
+      }}
+    }});
+    html += "</tr>";
+  }});
+  html += "</tbody></table>";
+  wrap.innerHTML = html;
+}}
+
 function buildCrossRef() {{
   const wrap = document.getElementById("cross-matrix");
   if(!wrap || wrap.children.length > 0) return;

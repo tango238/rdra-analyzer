@@ -1241,8 +1241,10 @@ def _build_viewer(output_dir: Path) -> str:
         mermaid_sources[f"uc_condition_{uc.id}"] = uc_gen.generate_single_condition_mermaid(uc)
     act_gen = ActivityDiagramGenerator()
     mermaid_sources["scenarios_overview"] = act_gen.generate_all_scenarios_flowchart(scenarios)
+    uc_actor_map = {uc.id: uc.actor for uc in usecases}
     for sc in scenarios:
-        mermaid_sources[f"scenario_{sc.scenario_id}"] = act_gen.generate_sequence_diagram(sc)
+        actor_name = uc_actor_map.get(sc.usecase_id, "")
+        mermaid_sources[f"scenario_{sc.scenario_id}"] = act_gen.generate_sequence_diagram(sc, actor_name=actor_name)
     st_gen = StateTransitionGenerator.__new__(StateTransitionGenerator)
     for sm in state_machines:
         mermaid_sources[f"state_{sm.entity_class}"] = st_gen.to_mermaid(sm)

@@ -26,14 +26,13 @@ class ActivityDiagramGenerator:
         Returns:
             str: Mermaid sequenceDiagram 記法の文字列
         """
-        # ステップからアクター一覧を収集（システム以外）
-        user_actors = set()
-        for step in scenario.steps:
-            if step.actor and step.actor != "システム":
-                user_actors.add(step.actor)
-
-        # ユースケースのアクター名を優先
-        primary_actor = actor_name or (list(user_actors)[0] if user_actors else "ユーザー")
+        # ユースケースのアクター名を使用（なければステップから推定）
+        if not actor_name:
+            for step in scenario.steps:
+                if step.actor and step.actor != "システム":
+                    actor_name = step.actor
+                    break
+        primary_actor = actor_name or "ユーザー"
 
         # 参加者定義を動的に構築
         lines = [
@@ -48,16 +47,8 @@ class ActivityDiagramGenerator:
             "    participant UI as フロントエンド",
             "    participant API as バックエンドAPI",
             "    participant DB as データベース",
+            "",
         ]
-
-        # プライマリ以外のアクターがいれば追加
-        other_actors = {}
-        for actor in sorted(user_actors - {primary_actor, "ユーザー"}):
-            alias = f"Actor_{len(other_actors)}"
-            other_actors[actor] = alias
-            lines.append(f"    actor {alias} as {self._safe_mermaid_text(actor)}")
-
-        lines.append("")
 
         for step in scenario.steps:
             step_comment = f"%% ステップ{step.step_no}: {step.action}"
@@ -74,17 +65,8 @@ class ActivityDiagramGenerator:
                 lines.append(f"    API-->>-UI: {safe_result}")
                 lines.append(f"    UI-->>User: 画面更新")
 
-            elif step.actor in other_actors:
-                # プライマリ以外のアクター
-                alias = other_actors[step.actor]
-                safe_action = self._safe_mermaid_text(step.action)
-                lines.append(f"    {alias}->>UI: {safe_action}")
-
-                safe_result = self._safe_mermaid_text(step.expected_result)
-                lines.append(f"    UI-->>{alias}: {safe_result}")
-
             else:
-                # プライマリアクター（ユースケースのアクターまたは「ユーザー」）
+                # システム以外は全てプライマリアクターとして扱う
                 safe_action = self._safe_mermaid_text(step.action)
                 lines.append(f"    User->>UI: {safe_action}")
 
