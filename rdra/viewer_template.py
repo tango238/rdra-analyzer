@@ -169,18 +169,16 @@ const GENERATED_AT = {_js_str(generated_at)};
 
 // ===== Nav config =====
 const VIEWS = [
-  {{key:"info_grouped",  label:"情報モデル概要",   diagram:"information_model_grouped"}},
-  {{key:"info_detail",   label:"情報モデル詳細",   diagram:"information_model"}},
-  {{key:"uc_diagram",    label:"ユースケース複合図",diagram:"usecase_diagram"}},
-  {{key:"uc_conditions", label:"ユースケース条件図",diagram:"usecase_conditions"}},
-  {{key:"scenarios",     label:"操作シナリオ",     diagram:null}},
-  {{key:"states",        label:"状態遷移図",       diagram:null}},
-  {{key:"policies",      label:"ビジネスポリシー", diagram:null}},
-  {{key:"screens",        label:"画面",             diagram:null}},
   {{key:"actors",         label:"アクター",         diagram:null}},
   {{key:"business",      label:"業務",             diagram:null}},
-  {{key:"actor_uc",      label:"アクター×UC",     diagram:null}},
+  {{key:"policies",      label:"ビジネスポリシー", diagram:null}},
+  {{key:"uc_diagram",    label:"ユースケース複合図",diagram:"usecase_diagram"}},
+  {{key:"info_detail",   label:"情報モデル",       diagram:"information_model"}},
+  {{key:"states",        label:"状態遷移図",       diagram:null}},
+  {{key:"screens",        label:"画面",             diagram:null}},
+  {{key:"scenarios",     label:"操作シナリオ",     diagram:null}},
   {{key:"cross_ref",     label:"エンティティ×UC",  diagram:null}},
+  {{key:"actor_entity",  label:"アクター×エンティティ", diagram:null}},
 ];
 
 let currentView = null;
@@ -229,21 +227,17 @@ function buildSections() {{
 
 function buildViewContent(v) {{
   let html = `<div class="view-title">${{v.label}}</div>`;
-  // Diagram-only views (uc_conditions は個別表示するので除外)
-  if (v.diagram && v.key !== "uc_conditions") {{
+  // Diagram-only views
+  if (v.diagram) {{
     html += `<div class="diagram-wrap" id="dg-${{v.key}}"></div>`;
   }}
   // Per-view extras
   switch(v.key) {{
-    case "info_grouped":
     case "info_detail":
       html += entityTable();
       break;
     case "uc_diagram":
       html += usecaseTable();
-      break;
-    case "uc_conditions":
-      html += ucConditionsTable();
       break;
     case "scenarios":
       html += scenarioTable();
@@ -265,11 +259,11 @@ function buildViewContent(v) {{
     case "business":
       html += `<div class="matrix-wrap" id="business-view"></div>`;
       break;
-    case "actor_uc":
-      html += `<div class="matrix-wrap" id="actor-uc-matrix"></div>`;
-      break;
     case "cross_ref":
       html += `<div class="matrix-wrap" id="cross-matrix"></div>`;
+      break;
+    case "actor_entity":
+      html += `<div class="matrix-wrap" id="actor-entity-matrix"></div>`;
       break;
   }}
   return html;
@@ -295,12 +289,12 @@ function ucConditionsTable() {{
   return sortableTable("uccond-tbl",["ID","名称","アクター","事前条件数","事後条件数","エンティティ数"],rows);
 }}
 function screenTable() {{
-  const screens = DATA.screen_specs||[];
-  if(!screens.length) return `<p style="color:var(--text-muted)">画面データがありません。<code>python main.py screens</code> を実行してください。</p>`;
+  const screens = getScreenList();
+  if(!screens.length) return `<p style="color:var(--text-muted)">画面データがありません。<code>python main.py analyze</code> を実行してください。</p>`;
   const rows = screens.map(s =>
-    `<tr><td class="clickable" data-screen="${{s.route_path}}" style="cursor:pointer;color:var(--accent)">${{s.route_path}}</td><td>${{s.component_name}}</td><td>${{s.page_title||""}}</td><td>${{s.layout_type||""}}</td><td>${{(s.action_buttons||[]).length}}</td><td>${{(s.form_fields||[]).length}}</td></tr>`
+    `<tr><td>${{s.id}}</td><td class="clickable" data-screen="${{s.route_path}}" style="cursor:pointer;color:var(--accent)">${{s.route_path}}</td><td>${{s.component_name}}</td><td>${{s.page_title||""}}</td><td>${{s.layout_type||""}}</td><td>${{(s.action_buttons||[]).length}}</td><td>${{(s.form_fields||[]).length}}</td></tr>`
   ).join("");
-  return sortableTable("screen-tbl",["ルート","コンポーネント","タイトル","レイアウト","ボタン数","フィールド数"],rows);
+  return sortableTable("screen-tbl",["ID","ルート","コンポーネント","タイトル","レイアウト","ボタン数","フィールド数"],rows);
 }}
 function actorTable() {{
   const actorMap = {{}};
@@ -310,16 +304,27 @@ function actorTable() {{
     if(u.category) actorMap[u.actor].categories.add(u.category);
     (u.related_entities||[]).forEach(e => actorMap[u.actor].entities.add(e));
   }});
-  const rows = Object.entries(actorMap).map(([actor, info]) =>
-    `<tr><td class="clickable" data-actor="${{actor}}" style="cursor:pointer;color:var(--accent)">${{actor}}</td><td>${{info.usecases.length}}</td><td>${{[...info.categories].join(", ")}}</td><td>${{info.entities.size}}</td></tr>`
-  ).join("");
-  return sortableTable("actor-tbl",["アクター名","UC数","カテゴリ","関連エンティティ数"],rows);
+  const rows = Object.entries(actorMap).map(([actor, info]) => {{
+    const actorId = getActorId(actor);
+    return `<tr><td>${{actorId}}</td><td class="clickable" data-actor="${{actor}}" style="cursor:pointer;color:var(--accent)">${{actor}}</td><td>${{info.usecases.length}}</td><td>${{[...info.categories].join(", ")}}</td><td>${{info.entities.size}}</td></tr>`;
+  }}).join("");
+  return sortableTable("actor-tbl",["ID","アクター名","UC数","カテゴリ","関連エンティティ数"],rows);
 }}
 function scenarioTable() {{
-  const rows = (DATA.scenarios||[]).map(s =>
-    `<tr><td class="clickable" data-uc="${{s.usecase_id}}">${{s.usecase_id}}</td><td class="clickable" data-scenario="${{s.scenario_id}}" style="cursor:pointer;color:var(--accent)">${{s.scenario_id}}</td><td>${{s.scenario_name}}</td><td>${{s.scenario_type}}</td><td>${{(s.steps||[]).length}}</td></tr>`
-  ).join("");
-  return sortableTable("sc-tbl",["UC-ID","シナリオID","名称","種別","ステップ数"],rows);
+  const ucs = (DATA.usecases||[]);
+  const ucMap = {{}};
+  ucs.forEach(u => ucMap[u.id] = u);
+  const rows = (DATA.scenarios||[]).map(s => {{
+    const uc = ucMap[s.usecase_id] || {{}};
+    const actor = uc.actor || "";
+    const actorObj = getActorList().find(a => a.name === actor);
+    const actorId = actorObj ? actorObj.id : "";
+    const ucName = uc.name || s.usecase_name || "";
+    const biz = findBusinessForUc(s.usecase_id);
+    const bizLabel = biz ? `${{biz.id}} ${{biz.name}}` : "";
+    return `<tr><td class="clickable" data-actor="${{actor}}" style="cursor:pointer;color:var(--accent)">${{actorId}} ${{actor}}</td><td>${{bizLabel}}</td><td class="clickable" data-uc="${{s.usecase_id}}">${{s.usecase_id}}</td><td>${{ucName}}</td><td class="clickable" data-scenario="${{s.scenario_id}}" style="cursor:pointer;color:var(--accent)">${{s.scenario_id}}</td><td>${{s.scenario_name}}</td><td>${{s.scenario_type}}</td><td>${{(s.steps||[]).length}}</td></tr>`;
+  }}).join("");
+  return sortableTable("sc-tbl",["アクター","業務","UC-ID","UC名","シナリオID","シナリオ名","種別","ステップ"],rows);
 }}
 function stateTable() {{
   const rows = (DATA.state_machines||[]).map(sm =>
@@ -361,8 +366,8 @@ function navigate(key) {{
   // scenarios: テーブルからシナリオIDクリックで詳細パネルに表示
   if(key==="states") initStateTabs();
   if(key==="business") buildBusinessView();
-  if(key==="actor_uc") buildActorUcMatrix();
   if(key==="cross_ref") buildCrossRef();
+  if(key==="actor_entity") buildActorEntityMatrix();
 }}
 
 async function renderDiagram(containerId, src) {{
@@ -498,6 +503,91 @@ function selectStateTab(sm, btn) {{
   renderDiagram("dg-state", MERMAID_SRC[srcKey]);
 }}
 
+// ===== Actor ID builder =====
+let ACTOR_LIST = null;
+function getActorList() {{
+  if(ACTOR_LIST) return ACTOR_LIST;
+  const actorSet = new Set();
+  (DATA.usecases||[]).forEach(u => {{ if(u.actor) actorSet.add(u.actor); }});
+  ACTOR_LIST = [...actorSet].sort().map((name,i) => ({{
+    id: `AC-${{String(i+1).padStart(3,"0")}}`,
+    name: name,
+  }}));
+  return ACTOR_LIST;
+}}
+function getActorId(name) {{
+  const a = getActorList().find(a => a.name === name);
+  return a ? a.id : "";
+}}
+
+// ===== Screen ID builder =====
+let SCREEN_LIST = null;
+function getScreenList() {{
+  if(SCREEN_LIST) return SCREEN_LIST;
+  SCREEN_LIST = (DATA.screen_specs||[]).map((s,i) => ({{
+    id: `SC-${{String(i+1).padStart(3,"0")}}`,
+    ...s,
+  }}));
+  return SCREEN_LIST;
+}}
+
+// ===== Business (業務) builder =====
+let BUSINESS_LIST = null;
+function getBusinessList() {{
+  if(BUSINESS_LIST) return BUSINESS_LIST;
+  const ucs = (DATA.usecases||[]);
+  const entities = (DATA.entities||[]);
+  const ucGroups = {{}};
+  ucs.forEach(u => {{
+    const crud = _routeToCrud(u.related_routes);
+    const hasCUD = crud.has("C") || crud.has("U") || crud.has("D");
+    if(!hasCUD) return;
+    (u.related_entities||[]).forEach(en => {{
+      const entObj = entities.find(e => e.class_name===en || e.name===en);
+      const entityName = entObj ? entObj.name : en;
+      if(!ucGroups[entityName]) ucGroups[entityName] = {{entity: entityName, ucs: []}};
+      if(!ucGroups[entityName].ucs.find(x => x.id === u.id)) {{
+        ucGroups[entityName].ucs.push(u);
+      }}
+    }});
+  }});
+  const list = [];
+  const seen = new Set();
+  Object.values(ucGroups).forEach(grp => {{
+    const actorMap = {{}};
+    grp.ucs.forEach(u => {{
+      if(!actorMap[u.actor]) actorMap[u.actor] = [];
+      actorMap[u.actor].push(u);
+    }});
+    Object.entries(actorMap).forEach(([actor, ucList]) => {{
+      const key = actor + "|" + grp.entity;
+      if(!seen.has(key)) {{
+        seen.add(key);
+        const crudSet = new Set();
+        ucList.forEach(u => {{
+          const crud = _routeToCrud(u.related_routes);
+          ["C","U","D"].forEach(c => {{ if(crud.has(c)) crudSet.add(c); }});
+        }});
+        list.push({{
+          actor: actor,
+          entity: grp.entity,
+          name: grp.entity + "管理",
+          ucs: ucList,
+          crud: crudSet,
+        }});
+      }}
+    }});
+  }});
+  list.sort((a,b) => a.actor.localeCompare(b.actor) || a.entity.localeCompare(b.entity));
+  list.forEach((g,i) => g.id = `BZ-${{String(i+1).padStart(3,"0")}}`);
+  BUSINESS_LIST = list;
+  return list;
+}}
+function findBusinessForUc(ucId) {{
+  const list = getBusinessList();
+  return list.find(g => g.ucs.some(u => u.id === ucId));
+}}
+
 // ===== Cross-reference matrix (CRUD) =====
 function _routeToCrud(routes) {{
   const crud = new Set();
@@ -513,60 +603,15 @@ function _routeToCrud(routes) {{
 function buildBusinessView() {{
   const wrap = document.getElementById("business-view");
   if(!wrap || wrap.children.length > 0) return;
-  const ucs = (DATA.usecases||[]);
   const entities = (DATA.entities||[]);
-  // 1. エンティティごとにCUD操作を持つUCをグループ化 → UCグループ
-  const ucGroups = {{}};  // key: エンティティ名 → {{entity, ucs: [uc]}}
-  ucs.forEach(u => {{
-    const crud = _routeToCrud(u.related_routes);
-    const hasCUD = crud.has("C") || crud.has("U") || crud.has("D");
-    if(!hasCUD) return;
-    (u.related_entities||[]).forEach(en => {{
-      const entObj = entities.find(e => e.class_name===en || e.name===en);
-      const entityName = entObj ? entObj.name : en;
-      if(!ucGroups[entityName]) ucGroups[entityName] = {{entity: entityName, ucs: []}};
-      if(!ucGroups[entityName].ucs.find(x => x.id === u.id)) {{
-        ucGroups[entityName].ucs.push(u);
-      }}
-    }});
-  }});
-  // 2. アクター×UCグループ → 業務
-  const gyomuList = [];
-  const gyomuSet = new Set();
-  Object.values(ucGroups).forEach(grp => {{
-    const actorMap = {{}};
-    grp.ucs.forEach(u => {{
-      if(!actorMap[u.actor]) actorMap[u.actor] = [];
-      actorMap[u.actor].push(u);
-    }});
-    Object.entries(actorMap).forEach(([actor, ucList]) => {{
-      const gyomuKey = actor + "|" + grp.entity;
-      if(!gyomuSet.has(gyomuKey)) {{
-        gyomuSet.add(gyomuKey);
-        const crudSet = new Set();
-        ucList.forEach(u => {{
-          const crud = _routeToCrud(u.related_routes);
-          ["C","U","D"].forEach(c => {{ if(crud.has(c)) crudSet.add(c); }});
-        }});
-        gyomuList.push({{
-          actor: actor,
-          entity: grp.entity,
-          name: grp.entity + "管理",
-          ucs: ucList,
-          crud: crudSet,
-        }});
-      }}
-    }});
-  }});
-  // ソート: アクター → エンティティ
-  gyomuList.sort((a,b) => a.actor.localeCompare(b.actor) || a.entity.localeCompare(b.entity));
-  // 3. テーブル描画
+  const gyomuList = getBusinessList();
   const crudColors = {{C:"#2a9d8f",U:"#f4a261",D:"#e63946"}};
   let html = `<p style="margin-bottom:12px;color:#666">業務 = アクター × UCグループ（エンティティに対するCUD操作を持つUCの集合）</p>`;
   html += "<table class='data-table' id='business-tbl'><thead><tr>";
-  html += `<th onclick="sortTable('business-tbl',0)">業務名<span class="sort-arrow">&#9650;</span></th>`;
-  html += `<th onclick="sortTable('business-tbl',1)">アクター<span class="sort-arrow">&#9650;</span></th>`;
-  html += `<th onclick="sortTable('business-tbl',2)">対象エンティティ<span class="sort-arrow">&#9650;</span></th>`;
+  html += `<th onclick="sortTable('business-tbl',0)">業務ID<span class="sort-arrow">&#9650;</span></th>`;
+  html += `<th onclick="sortTable('business-tbl',1)">業務名<span class="sort-arrow">&#9650;</span></th>`;
+  html += `<th onclick="sortTable('business-tbl',2)">アクター<span class="sort-arrow">&#9650;</span></th>`;
+  html += `<th onclick="sortTable('business-tbl',3)">対象エンティティ<span class="sort-arrow">&#9650;</span></th>`;
   html += `<th>CUD</th><th>関連UC</th>`;
   html += "</tr></thead><tbody>";
   gyomuList.forEach(g => {{
@@ -578,6 +623,7 @@ function buildBusinessView() {{
       `<span class="clickable" data-uc="${{u.id}}" style="font-size:0.85em">${{u.id}}</span>`
     ).join(" ");
     html += `<tr>`;
+    html += `<td>${{g.id}}</td>`;
     html += `<td><strong>${{g.name}}</strong></td>`;
     html += `<td class="clickable" data-actor="${{g.actor}}" style="cursor:pointer;color:var(--accent)">${{g.actor}}</td>`;
     html += `<td class="clickable" data-entity="${{cls}}" style="cursor:pointer;color:var(--accent)">${{g.entity}}</td>`;
@@ -595,38 +641,51 @@ function buildBusinessView() {{
   wrap.innerHTML = html;
 }}
 
-function buildActorUcMatrix() {{
-  const wrap = document.getElementById("actor-uc-matrix");
+function buildActorEntityMatrix() {{
+  const wrap = document.getElementById("actor-entity-matrix");
   if(!wrap || wrap.children.length > 0) return;
   const ucs = (DATA.usecases||[]);
-  // アクター一覧を収集
+  const entities = (DATA.entities||[]);
+  // アクター一覧
   const actorSet = new Set();
   ucs.forEach(u => {{ if(u.actor) actorSet.add(u.actor); }});
   const actors = [...actorSet].sort();
-  // カテゴリ一覧を収集
-  const categorySet = new Set();
-  ucs.forEach(u => {{ if(u.category) categorySet.add(u.category); }});
-  const categories = [...categorySet].sort();
-  // アクター×カテゴリごとにUCをグループ化
+  // エンティティ一覧（UCに関連するもののみ）
+  const entitySet = new Set();
+  ucs.forEach(u => (u.related_entities||[]).forEach(e => entitySet.add(e)));
+  const entityNames = [...entitySet].sort();
+  // アクター×エンティティ → CRUD集合
   const map = {{}};
   ucs.forEach(u => {{
-    const key = (u.actor||"") + "|" + (u.category||"");
-    if(!map[key]) map[key] = [];
-    map[key].push(u);
+    const crud = _routeToCrud(u.related_routes);
+    (u.related_entities||[]).forEach(en => {{
+      const entObj = entities.find(e => e.class_name===en || e.name===en);
+      const eName = entObj ? entObj.name : en;
+      const key = (u.actor||"") + "|" + eName;
+      if(!map[key]) map[key] = new Set();
+      crud.forEach(c => map[key].add(c));
+    }});
   }});
-  let html = "<table class='matrix-table'><thead><tr><th class='row-head'>アクター \\ カテゴリ</th>";
-  categories.forEach(cat => html += `<th>${{cat}}</th>`);
+  const crudColors = {{C:"#2a9d8f",R:"#4361ee",U:"#f4a261",D:"#e63946"}};
+  let html = "<table class='matrix-table'><thead><tr><th class='row-head'>アクター \\ エンティティ</th>";
+  entityNames.forEach(en => {{
+    const entObj = entities.find(e => e.class_name===en || e.name===en);
+    const cls = entObj ? entObj.class_name : en;
+    const name = entObj ? entObj.name : en;
+    html += `<th class="clickable-header" data-entity="${{cls}}" style="cursor:pointer">${{name}}</th>`;
+  }});
   html += "</tr></thead><tbody>";
   actors.forEach(actor => {{
     html += "<tr>";
     html += `<td class="row-head clickable-header" data-actor="${{actor}}" style="cursor:pointer">${{actor}}</td>`;
-    categories.forEach(cat => {{
-      const key = actor + "|" + cat;
-      const ucList = map[key] || [];
-      if(ucList.length > 0) {{
-        const labels = ucList.map(u =>
-          `<span class="clickable" data-uc="${{u.id}}" style="font-size:0.85em">${{u.id}}</span>`
-        ).join("<br>");
+    entityNames.forEach(en => {{
+      const entObj = entities.find(e => e.class_name===en || e.name===en);
+      const eName = entObj ? entObj.name : en;
+      const key = actor + "|" + eName;
+      const cruds = map[key];
+      if(cruds && cruds.size > 0) {{
+        const labels = ["C","R","U","D"].filter(c=>cruds.has(c))
+          .map(c=>`<span style="color:${{crudColors[c]}};font-weight:bold">${{c}}</span>`).join("");
         html += `<td class="check">${{labels}}</td>`;
       }} else {{
         html += `<td></td>`;
@@ -635,6 +694,12 @@ function buildActorUcMatrix() {{
     html += "</tr>";
   }});
   html += "</tbody></table>";
+  html += `<div style="margin-top:12px;font-size:13px">
+    <span style="color:${{crudColors.C}}">&#9632; C=Create</span>&nbsp;
+    <span style="color:${{crudColors.R}}">&#9632; R=Read</span>&nbsp;
+    <span style="color:${{crudColors.U}}">&#9632; U=Update</span>&nbsp;
+    <span style="color:${{crudColors.D}}">&#9632; D=Delete</span>
+  </div>`;
   wrap.innerHTML = html;
 }}
 
@@ -838,11 +903,22 @@ function showUcDetail(ucId) {{
   // 関連エンティティ: information_groups またはユースケースの related_entities から
   const entList = (groups.length && groups[0].entities) ? groups[0].entities : (uc.related_entities||[]);
   if(entList.length) {{
+    const ucCrud = _routeToCrud(uc.related_routes||[]);
+    const crudColors = {{C:"#2a9d8f",R:"#4361ee",U:"#f4a261",D:"#e63946"}};
     html += `<div class="detail-section"><h4>関連エンティティ</h4><ul class="detail-list">${{entList.map(en=>{{
       const entObj = (DATA.entities||[]).find(e=>e.name===en||e.class_name===en);
       const cls = entObj ? entObj.class_name : en;
       const name = entObj ? entObj.name : en;
-      return `<li><span class="clickable" data-entity="${{cls}}">${{name}}</span></li>`;
+      // エンティティ固有のCRUDをルートから推定
+      const entRoutes = (uc.related_routes||[]).filter(r => {{
+        const path = r.split(" ").pop().toLowerCase();
+        const enLower = en.toLowerCase();
+        return path.includes(enLower) || path.includes(enLower + "s") || path.includes(enLower.replace(/y$/,"ies"));
+      }});
+      const entCrud = entRoutes.length > 0 ? _routeToCrud(entRoutes) : ucCrud;
+      const crudBadges = ["C","R","U","D"].filter(c=>entCrud.has(c))
+        .map(c=>`<span style="color:${{crudColors[c]}};font-weight:bold;margin-left:2px">${{c}}</span>`).join("");
+      return `<li><span class="clickable" data-entity="${{cls}}">${{name}}</span> ${{crudBadges}}</li>`;
     }}).join("")}}</ul></div>`;
   }}
   if(uc.related_controllers && uc.related_controllers.length) {{
@@ -858,9 +934,18 @@ function showUcDetail(ucId) {{
     html += `<div class="detail-section"><h4>シナリオ</h4><ul class="detail-list">${{scs.map(s=>`<li>${{s.scenario_id}} ${{s.scenario_name}} (${{s.scenario_type}})</li>`).join("")}}</ul></div>`;
   }}
   if(pols.length) {{
-    html += `<div class="detail-section"><h4>関連ポリシー</h4><ul class="detail-list">${{pols.map(p=>`<li>${{p.id}} ${{p.name}}</li>`).join("")}}</ul></div>`;
+    html += `<div class="detail-section"><h4>関連ポリシー</h4><ul class="detail-list">${{pols.map(p=>`<li><span class="clickable" data-policy="${{p.id}}">${{p.id}}</span> ${{p.name}}</li>`).join("")}}</ul></div>`;
+  }}
+  // ユースケース条件図
+  const condSrc = MERMAID_SRC["uc_condition_" + ucId];
+  if(condSrc) {{
+    html += `<div class="detail-section"><h4>条件図</h4><div class="scenario-diagram-wrap" id="uc-cond-dg-${{ucId}}"></div></div>`;
   }}
   openDetail(html);
+  // 条件図を非同期レンダリング
+  if(condSrc) {{
+    setTimeout(() => renderDiagram("uc-cond-dg-" + ucId, condSrc), 100);
+  }}
 }}
 
 function showActorDetail(actorName) {{
