@@ -173,7 +173,7 @@ const VIEWS = [
   {{key:"business",      label:"業務",             diagram:null}},
   {{key:"policies",      label:"ビジネスポリシー", diagram:null}},
   {{key:"uc_diagram",    label:"ユースケース複合図",diagram:"usecase_diagram"}},
-  {{key:"info_detail",   label:"情報モデル",       diagram:"information_model"}},
+  {{key:"info_detail",   label:"エンティティ",     diagram:"information_model"}},
   {{key:"states",        label:"状態遷移図",       diagram:null}},
   {{key:"screens",        label:"画面",             diagram:null}},
   {{key:"scenarios",     label:"操作シナリオ",     diagram:null}},
@@ -333,10 +333,13 @@ function stateTable() {{
   return sortableTable("sm-tbl",["エンティティ","状態フィールド","状態数","遷移数"],rows);
 }}
 function policyTable() {{
-  const rows = (DATA.policies||[]).map(p =>
-    `<tr><td class="clickable" data-policy="${{p.id}}" style="cursor:pointer;color:var(--accent)">${{p.id}}</td><td>${{p.name}}</td><td>${{p.category||""}}</td><td>${{priorityBadge(p.severity)}}</td><td>${{p.description||""}}</td></tr>`
-  ).join("");
-  return sortableTable("bp-tbl",["ID","名称","カテゴリ","重要度","説明"],rows);
+  const rows = (DATA.policies||[]).map(p => {{
+    const ucLinks = (p.related_usecases||[]).map(uid =>
+      `<span class="clickable" data-uc="${{uid}}" style="font-size:0.85em">${{uid}}</span>`
+    ).join(" ");
+    return `<tr><td class="clickable" data-policy="${{p.id}}" style="cursor:pointer;color:var(--accent)">${{p.id}}</td><td>${{p.name}}</td><td>${{p.category||""}}</td><td>${{priorityBadge(p.severity)}}</td><td>${{ucLinks || '<span style="color:var(--text-muted)">—</span>'}}</td><td>${{p.description||""}}</td></tr>`;
+  }}).join("");
+  return sortableTable("bp-tbl",["ID","名称","カテゴリ","重要度","UC-ID","説明"],rows);
 }}
 
 function sortableTable(id, headers, rows) {{
@@ -848,14 +851,16 @@ function showPolicyDetail(bpId) {{
       const uc = (DATA.usecases||[]).find(u => u.id===uid);
       return `<li><span class="clickable" data-uc="${{uid}}">${{uid}}</span>${{uc ? " " + uc.name : ""}}</li>`;
     }}).join("")}}</ul></div>`;
+  }} else {{
+    html += `<div class="detail-section"><h4>関連ユースケース</h4><p style="color:var(--text-muted)">該当無し</p></div>`;
   }}
   if(bp.code_references && bp.code_references.length) {{
-    html += `<div class="detail-section"><h4>コード参照</h4><table class="data-table"><thead><tr><th>ファイル</th><th>説明</th><th>種別</th></tr></thead><tbody>`;
+    html += `<div class="detail-section"><h4>コード参照</h4><ul class="detail-list">`;
     bp.code_references.forEach(ref => {{
-      const typeBadge = ref.code_type ? `<span class="badge badge-could">${{ref.code_type}}</span>` : "—";
-      html += `<tr><td><code style="font-size:0.85em">${{ref.file_path}}</code></td><td>${{ref.description}}</td><td>${{typeBadge}}</td></tr>`;
+      const typeBadge = ref.code_type ? ` <span class="badge badge-could">${{ref.code_type}}</span>` : "";
+      html += `<li style="margin-bottom:8px"><code style="font-size:0.85em">${{ref.file_path}}</code>${{typeBadge}}<br><span style="color:var(--text-muted);font-size:0.9em">${{ref.description}}</span></li>`;
     }});
-    html += `</tbody></table></div>`;
+    html += `</ul></div>`;
   }}
   openDetail(html);
 }}
@@ -875,8 +880,21 @@ function showEntityDetail(cls) {{
   if(rels.length) {{
     html += `<div class="detail-section"><h4>関連</h4><ul class="detail-list">${{rels.map(r=>`<li>${{r.from_entity}} → ${{r.to_entity}} (${{r.relation_type}}) ${{r.label||""}}</li>`).join("")}}</ul></div>`;
   }}
-  if(groups.length) {{
-    html += `<div class="detail-section"><h4>関連ユースケース</h4><ul class="detail-list">${{groups.map(g=>`<li><span class="clickable" data-uc="${{g.usecase_id}}">${{g.usecase_id}}</span> ${{g.usecase_name}}</li>`).join("")}}</ul></div>`;
+  // 関連UC: information_groups + related_entitiesから逆引き
+  const relatedUcIds = new Set(groups.map(g => g.usecase_id));
+  (DATA.usecases||[]).forEach(u => {{
+    if((u.related_entities||[]).some(e => e === ent.name || e === ent.class_name)) relatedUcIds.add(u.id);
+  }});
+  if(relatedUcIds.size) {{
+    const crudColors = {{C:"#2a9d8f",R:"#4361ee",U:"#f4a261",D:"#e63946"}};
+    html += `<div class="detail-section"><h4>関連ユースケース</h4><ul class="detail-list">${{[...relatedUcIds].map(uid => {{
+      const uc = (DATA.usecases||[]).find(u => u.id===uid);
+      if(!uc) return "";
+      const crud = _routeToCrud(uc.related_routes||[]);
+      const crudBadges = ["C","R","U","D"].filter(c=>crud.has(c))
+        .map(c=>`<span style="color:${{crudColors[c]}};font-weight:bold;margin-left:2px">${{c}}</span>`).join("");
+      return `<li><span class="clickable" data-uc="${{uid}}">${{uid}}</span> ${{uc.name}} ${{crudBadges}}</li>`;
+    }}).join("")}}</ul></div>`;
   }}
   if(sms.length) {{
     html += `<div class="detail-section"><h4>状態遷移</h4><ul class="detail-list">${{sms.map(s=>`<li>フィールド: ${{s.state_field}} / 状態数: ${{(s.states||[]).length}}</li>`).join("")}}</ul></div>`;
