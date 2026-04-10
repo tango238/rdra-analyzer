@@ -44,6 +44,8 @@ class ParsedController:
     methods: list[str]          # 公開メソッド/関数一覧
     docblocks: dict[str, str]   # メソッド名→ドキュメントコメント
     request_rules: dict[str, list[str]]  # メソッド名→バリデーションルール
+    entity_operations: dict[str, list] = field(default_factory=dict)
+    # メソッド名 → そのメソッドから到達するEntityOperationリスト
 
 
 @dataclass
@@ -68,6 +70,18 @@ class ParsedPage:
     imported_hooks: list[str]   # データ取得フック/サービス呼び出し
     form_fields: list[str] = field(default_factory=list)
     feature_component: str = ""
+
+
+@dataclass
+class EntityOperation:
+    """エンティティに対するCRUD操作の検出結果"""
+    entity_class: str          # 操作対象のエンティティクラス名 (例: "Stock")
+    operation: str             # "Create" | "Read" | "Update" | "Delete"
+    method_signature: str      # 検出されたメソッド/パターン (例: "Stock::where(...)->decrement('qty')")
+    source_file: str           # 操作が記述されたファイルパス
+    source_class: str          # 操作が記述されたクラス名 (例: "OrderService")
+    source_method: str         # 操作が記述されたメソッド名 (例: "createOrder")
+    call_chain: list[str] = field(default_factory=list)  # コール階層
 
 
 class SourceParser:
