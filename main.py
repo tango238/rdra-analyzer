@@ -143,11 +143,18 @@ def _save_parse_checkpoint(data: dict, checkpoint_path: Path) -> None:
                 "api_calls": p.api_calls, "imported_hooks": p.imported_hooks,
                 "form_fields": p.form_fields, "feature_component": p.feature_component}
 
+    def _entity_operation_to_dict(op) -> dict:
+        return {"entity_class": op.entity_class, "operation": op.operation,
+                "method_signature": op.method_signature, "source_file": op.source_file,
+                "source_class": op.source_class, "source_method": op.source_method,
+                "call_chain": op.call_chain}
+
     serializable = {
         "routes": [_route_to_dict(r) for r in data.get("routes", [])],
         "controllers": [_controller_to_dict(c) for c in data.get("controllers", [])],
         "models": [_model_to_dict(m) for m in data.get("models", [])],
         "pages": [_page_to_dict(p) for p in data.get("pages", [])],
+        "entity_operations": [_entity_operation_to_dict(op) for op in data.get("entity_operations", [])],
         "completed_repos": data.get("completed_repos", []),
         "phase": data.get("phase", "parse"),
     }
@@ -159,18 +166,20 @@ def _load_parse_checkpoint(checkpoint_path: Path) -> dict | None:
     """ソースコード解析の中間結果を読み込む"""
     if not checkpoint_path.exists():
         return None
-    from analyzer.source_parser import ParsedRoute, ParsedController, ParsedModel, ParsedPage
+    from analyzer.source_parser import ParsedRoute, ParsedController, ParsedModel, ParsedPage, EntityOperation
 
     data = json.loads(checkpoint_path.read_text(encoding="utf-8"))
     routes = [ParsedRoute(**r) for r in data.get("routes", [])]
     controllers = [ParsedController(**c) for c in data.get("controllers", [])]
     models = [ParsedModel(**m) for m in data.get("models", [])]
     pages = [ParsedPage(**p) for p in data.get("pages", [])]
+    entity_operations = [EntityOperation(**op) for op in data.get("entity_operations", [])]
     return {
         "routes": routes,
         "controllers": controllers,
         "models": models,
         "pages": pages,
+        "entity_operations": entity_operations,
         "completed_repos": data.get("completed_repos", []),
         "phase": data.get("phase", "parse"),
     }
@@ -1008,10 +1017,14 @@ def run_gap(
         console.print("'python main.py analyze' を再実行してください。")
         raise typer.Exit(1)
 
-    from analyzer.source_parser import ParsedRoute, ParsedModel
+    from analyzer.source_parser import ParsedRoute, ParsedModel, EntityOperation
     routes = [ParsedRoute(**r) if isinstance(r, dict) else r for r in cp["routes"]]
     models = [ParsedModel(**m) if isinstance(m, dict) else m for m in cp["models"]]
-    console.print(f"  チェックポイントから読み込み: ルート {len(routes)}件 | モデル {len(models)}件")
+    entity_operations = [
+        EntityOperation(**op) if isinstance(op, dict) else op
+        for op in cp.get("entity_operations", [])
+    ]
+    console.print(f"  チェックポイントから読み込み: ルート {len(routes)}件 | モデル {len(models)}件 | エンティティ操作 {len(entity_operations)}件")
 
     # プロジェクトコンテキスト構築
     project_context_text = ""
@@ -1029,7 +1042,7 @@ def run_gap(
     console.print("[dim]CRUDギャップを分析中...[/dim]")
     from gap.crud_analyzer import CrudAnalyzer
     analyzer = CrudAnalyzer()
-    statuses, gaps = analyzer.analyze(entities, routes, scenarios, usecases)
+    statuses, gaps = analyzer.analyze(entities, routes, scenarios, usecases, entity_operations)
 
     covered = sum(1 for s in statuses if s.coverage_percentage == 100)
     console.print(f"  -> エンティティ: {len(statuses)}件")
