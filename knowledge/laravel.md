@@ -51,3 +51,103 @@ class UserController extends Controller {
     public function destroy(User $user) { ... }      // DELETE /users/{id}
 }
 ```
+
+## CRUD操作パターン
+
+> **注意**: 対象プロジェクトの CLAUDE.md または AGENTS.md にCRUD操作パターンや
+> データアクセス層の規約が記載されている場合は、そちらを優先すること。
+> 以下はフレームワークの一般的なパターンであり、フォールバックとして参照する。
+
+### Eloquent Model 直接操作
+| CRUD | メソッド/パターン |
+|------|-----------------|
+| Create | `Model::create([...])`, `new Model(); $model->save()`, `Model::insert([...])`, `Model::firstOrCreate([...])`, `Model::updateOrCreate([...])` |
+| Read | `Model::find($id)`, `Model::where(...)->get()`, `Model::all()`, `Model::first()`, `Model::paginate()`, `Model::findOrFail($id)` |
+| Update | `$model->update([...])`, `$model->save()` (既存レコード), `Model::where(...)->update([...])`, `$model->increment(...)`, `$model->decrement(...)` |
+| Delete | `$model->delete()`, `Model::destroy($id)`, `Model::where(...)->delete()`, `$model->forceDelete()`, `$model->trash()` |
+
+### Query Builder 操作
+| CRUD | メソッド/パターン |
+|------|-----------------|
+| Create | `DB::table('x')->insert([...])` |
+| Read | `DB::table('x')->get()`, `DB::table('x')->find($id)`, `DB::table('x')->where(...)->first()` |
+| Update | `DB::table('x')->where(...)->update([...])`, `DB::table('x')->increment(...)`, `DB::table('x')->decrement(...)` |
+| Delete | `DB::table('x')->where(...)->delete()`, `DB::table('x')->truncate()` |
+
+### リレーション経由の操作
+| CRUD | メソッド/パターン |
+|------|-----------------|
+| Create | `$parent->children()->create([...])`, `$parent->children()->createMany([...])`, `$parent->children()->save($child)` |
+| Read | `$parent->children()->get()`, `$parent->children` (動的プロパティ), `$parent->children()->where(...)->get()` |
+| Update | `$parent->children()->update([...])` |
+| Delete | `$parent->children()->delete()`, `$parent->children()->detach()` (多対多) |
+
+## コール階層
+
+> **注意**: 対象プロジェクトの CLAUDE.md または AGENTS.md にアーキテクチャ構成や
+> レイヤー間の呼び出し規約が記載されている場合は、そちらを優先すること。
+> 以下はフレームワークの典型的なパターンであり、フォールバックとして参照する。
+
+### パターン1: Controller → Model（直接操作）
+- 小〜中規模プロジェクトに多い
+- コントローラー内でEloquentモデルを直接操作
+```php
+public function store(StoreOrderRequest $request) {
+    $order = Order::create($request->validated());       // Order: Create
+    $order->items()->createMany($request->items);        // OrderItem: Create
+    Stock::where('product_id', $pid)->decrement('qty');  // Stock: Update
+}
+```
+
+### パターン2: Controller → Service → Model
+- Service層でビジネスロジックを集約
+```php
+// Controller
+public function store(StoreOrderRequest $request) {
+    return $this->orderService->createOrder($request->validated());
+}
+// Service
+public function createOrder(array $data): Order {
+    $order = Order::create($data);                       // Order: Create
+    $this->stockService->decrementStock($data['items']); // Stock: Update
+    Payment::create([...]);                               // Payment: Create
+    return $order;
+}
+```
+
+### パターン3: Controller → Service → Repository → Model
+- DDD / クリーンアーキテクチャ
+```php
+// Repository
+class OrderRepository {
+    public function create(array $data): Order {
+        return Order::create($data);                     // Order: Create
+    }
+}
+// Service
+public function createOrder(array $data): Order {
+    $order = $this->orderRepo->create($data);
+    $this->stockRepo->decrement($data['items']);         // Stock: Update
+    return $order;
+}
+```
+
+### パターン4: Event / Job / Observer 経由
+```php
+// Observer
+class OrderObserver {
+    public function created(Order $order) {
+        Notification::create([...]);                     // Notification: Create
+    }
+    public function deleted(Order $order) {
+        $order->items()->delete();                       // OrderItem: Delete (cascade)
+    }
+}
+// Job
+class ProcessPaymentJob {
+    public function handle() {
+        Payment::create([...]);                           // Payment: Create
+    }
+}
+```
+```
