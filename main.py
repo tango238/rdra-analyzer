@@ -259,6 +259,7 @@ def run_analyze(
     all_controllers = checkpoint["controllers"] if checkpoint else []
     all_models = checkpoint["models"] if checkpoint else []
     all_pages = checkpoint["pages"] if checkpoint else []
+    all_entity_operations = checkpoint.get("entity_operations", []) if checkpoint else []
     all_contexts = []
     completed_repos = set(checkpoint["completed_repos"]) if checkpoint else set()
 
@@ -304,6 +305,11 @@ def run_analyze(
             elif key == "pages":
                 all_pages.extend(items)
 
+        repo_entity_ops = result.get("entity_operations", [])
+        if repo_entity_ops:
+            all_entity_operations.extend(repo_entity_ops)
+            console.print(f"    -> エンティティ操作: {len(repo_entity_ops)}件")
+
         if ctx.detected_stacks:
             console.print(f"    -> 技術スタック: {', '.join(ctx.detected_stacks)}")
 
@@ -313,6 +319,7 @@ def run_analyze(
         _save_parse_checkpoint({
             "routes": all_routes, "controllers": all_controllers,
             "models": all_models, "pages": all_pages,
+            "entity_operations": all_entity_operations,
             "completed_repos": list(completed_repos), "phase": "parse",
         }, checkpoint_path)
         console.print(f"    [dim]-> チェックポイント保存: {checkpoint_path}[/dim]")
@@ -323,6 +330,7 @@ def run_analyze(
     _save_parse_checkpoint({
         "routes": all_routes, "controllers": all_controllers,
         "models": all_models, "pages": all_pages,
+        "entity_operations": all_entity_operations,
         "completed_repos": list(completed_repos), "phase": "parsed",
     }, checkpoint_path)
 
@@ -483,6 +491,7 @@ def run_analyze(
     _save_parse_checkpoint({
         "routes": all_routes, "controllers": all_controllers,
         "models": all_models, "pages": all_pages,
+        "entity_operations": all_entity_operations,
         "completed_repos": list(completed_repos), "phase": "done",
     }, checkpoint_path)
 

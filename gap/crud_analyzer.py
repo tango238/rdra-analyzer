@@ -306,6 +306,8 @@ class CrudAnalyzer:
     ) -> None:
         """EntityOperationからエンティティのCRUD操作を検出する（全証跡収集）"""
         for op in entity_operations:
+            if not op.entity_class or not op.operation:
+                continue
             if op.entity_class.lower() != entity.class_name.lower():
                 continue
 
