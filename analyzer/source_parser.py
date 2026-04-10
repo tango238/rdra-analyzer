@@ -110,6 +110,7 @@ class SourceParser:
                 "controllers": [ParsedController],
                 "models": [ParsedModel],
                 "pages": [ParsedPage],
+                "entity_operations": [EntityOperation],
                 "project_context": ProjectContext,
             }
         """
@@ -117,18 +118,27 @@ class SourceParser:
         ctx = build_context(repo_path)
         context_text = format_context_for_prompt([ctx])
 
+        entity_operations: list[EntityOperation] = []
+
         if self._llm is not None and hasattr(self._llm, "analyze_codebase"):
             # LLM 駆動の解析
             routes = self._extract_routes_with_llm(repo_path, context_text)
             controllers = self._extract_controllers_with_llm(repo_path, context_text)
             models = self._extract_models_with_llm(repo_path, context_text)
             pages = self._extract_pages_with_llm(repo_path, context_text)
+            entity_operations = self._extract_entity_operations_with_llm(
+                repo_path, context_text, models
+            )
+            self._attach_operations_to_controllers(controllers, entity_operations)
         elif self._llm is not None:
             # Anthropic API のみ（analyze_codebase なし）→ コンテキストベースで推定
             routes = self._extract_routes_with_api(context_text)
             controllers = []
             models = self._extract_models_with_api(context_text)
             pages = []
+            entity_operations = self._extract_entity_operations_with_api(
+                context_text, models, controllers
+            )
         else:
             # LLM なし → マニフェスト＋ディレクトリ構造からの最低限の推定
             routes = []
@@ -141,6 +151,7 @@ class SourceParser:
             "controllers": controllers,
             "models": models,
             "pages": pages,
+            "entity_operations": entity_operations,
             "project_context": ctx,
         }
 
@@ -155,6 +166,7 @@ class SourceParser:
         all_controllers: list[ParsedController] = []
         all_models: list[ParsedModel] = []
         all_pages: list[ParsedPage] = []
+        all_entity_operations: list[EntityOperation] = []
         all_contexts: list[ProjectContext] = []
 
         for repo_path in self._config.repo_paths:
@@ -163,6 +175,7 @@ class SourceParser:
             all_controllers.extend(result["controllers"])
             all_models.extend(result["models"])
             all_pages.extend(result["pages"])
+            all_entity_operations.extend(result.get("entity_operations", []))
             all_contexts.append(result["project_context"])
 
         return {
@@ -170,6 +183,7 @@ class SourceParser:
             "controllers": all_controllers,
             "models": all_models,
             "pages": all_pages,
+            "entity_operations": all_entity_operations,
             "project_contexts": all_contexts,
         }
 
