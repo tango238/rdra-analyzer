@@ -216,7 +216,7 @@ class TestRunParallelParse:
         assert failures == []
         parser.parse_repo.assert_not_called()
 
-    def test_parallel_one_runs_serially(self, tmp_path):
+    def test_parallel_one_returns_all_results(self, tmp_path):
         repos = [tmp_path / f"r{i}" for i in range(3)]
         for r in repos:
             r.mkdir()

@@ -29,7 +29,10 @@ import json
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Callable, Optional
+from typing import TYPE_CHECKING, Callable, Optional
+
+if TYPE_CHECKING:
+    from analyzer.source_parser import RepoParseResult
 
 import typer
 from rich.console import Console
@@ -250,8 +253,8 @@ def _run_parallel_parse(
     pending_repos: list[Path],
     parser,
     parallel: int,
-    on_complete: Optional[Callable] = None,
-) -> tuple[list, list]:
+    on_complete: Optional[Callable[["RepoParseResult"], None]] = None,
+) -> tuple[list["RepoParseResult"], list["RepoParseResult"]]:
     """
     pending_repos を ThreadPoolExecutor で並列に parse する。
 
@@ -262,16 +265,24 @@ def _run_parallel_parse(
 
     Args:
         pending_repos: 解析対象のリポジトリパス一覧（completed_repos を除外済み）
-        parser: SourceParser インスタンス（全ワーカーで共有される）
+        parser: SourceParser インスタンス（全ワーカーで共有される）。
+                parse_repo(repo_path) はスレッドセーフである必要がある。
         parallel: max_workers（_resolve_parallel で解決済みの値）
         on_complete: 各 Future 完了時にメインスレッドで呼ばれる callback。
                      シグネチャ: (RepoParseResult) -> None
 
     Returns:
         (successes, failures) の 2 タプル。各要素は RepoParseResult のリスト。
+
+    Note:
+        on_complete が例外を送出した場合、例外はそのまま呼び出し側に伝播する。
+        ThreadPoolExecutor の context manager は残りの future 完了を待ってから
+        抜けるため、実行中のワーカーはキャンセルされずに完走する（結果は破棄）。
+        checkpoint はその例外より前の on_complete 呼び出しで書き込まれた状態が
+        残る。
     """
-    successes: list = []
-    failures: list = []
+    successes: list["RepoParseResult"] = []
+    failures: list["RepoParseResult"] = []
 
     if not pending_repos:
         return successes, failures
