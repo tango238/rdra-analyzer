@@ -1522,6 +1522,10 @@ def run_all(
     base_url: Optional[str] = typer.Option(
         None, "--url", "-u", help="E2EテストのベースURL"
     ),
+    parallel: int = typer.Option(
+        0, "--parallel", "-j",
+        help="リポジトリ並列度（0=自動: min(4, リポ数)、1=直列）"
+    ),
 ):
     """
     全パートを順番に実行する。
@@ -1551,6 +1555,7 @@ def run_all(
         output_dir=output_dir,
         max_routes=200,
         skip_llm=False,
+        parallel=parallel,
     )
     if result is None:
         raise typer.Exit(1)
