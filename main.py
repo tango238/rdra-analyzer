@@ -211,6 +211,39 @@ def _resolve_parallel(parallel: int, repo_count: int) -> int:
     return parallel
 
 
+def _parse_single_repo(repo_path: Path, parser) -> "RepoParseResult":
+    """
+    並列ワーカー: 1 リポジトリを解析し RepoParseResult を返す。
+
+    例外は catch して success=False で包んで返すので、呼び出し側は
+    Future.result() を例外ハンドリングなしで受け取れる。
+
+    ここでは build_context() を呼ばない。context は並列実行の外で
+    config.repo_paths 順に事前構築する必要があるため。
+    （parse_repo 内部では独自に build_context を呼ぶがそれは LLM プロンプト用）
+    """
+    from analyzer.source_parser import RepoParseResult
+
+    repo_name = repo_path.name
+    try:
+        result = parser.parse_repo(repo_path)
+        return RepoParseResult(
+            repo_name=repo_name,
+            success=True,
+            routes=result["routes"],
+            controllers=result["controllers"],
+            models=result["models"],
+            pages=result["pages"],
+            entity_operations=result.get("entity_operations", []),
+        )
+    except Exception as e:
+        return RepoParseResult(
+            repo_name=repo_name,
+            success=False,
+            error=str(e),
+        )
+
+
 @app.command("analyze")
 def run_analyze(
     repo: Optional[list[str]] = typer.Option(
