@@ -412,7 +412,7 @@ def run_analyze(
         if rp.name not in completed_repos
     ]
 
-    effective_parallel = _resolve_parallel(parallel, len(config.repo_paths))
+    effective_parallel = _resolve_parallel(parallel, len(pending_repos))
     failed_repos: list[tuple[str, str]] = []
 
     if pending_repos:
@@ -468,7 +468,7 @@ def run_analyze(
         console.print(
             "  [yellow]--resume で再実行すると失敗したリポだけ再試行されます[/yellow]"
         )
-        if len(failed_repos) == len(pending_repos) and pending_repos:
+        if len(failed_repos) == len(config.repo_paths):
             raise typer.Exit(1)
 
     routes = all_routes[:max_routes]
