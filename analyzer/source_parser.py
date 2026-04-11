@@ -96,11 +96,11 @@ class RepoParseResult:
     """
     repo_name: str
     success: bool
-    routes: list = field(default_factory=list)
-    controllers: list = field(default_factory=list)
-    models: list = field(default_factory=list)
-    pages: list = field(default_factory=list)
-    entity_operations: list = field(default_factory=list)
+    routes: list[ParsedRoute] = field(default_factory=list)
+    controllers: list[ParsedController] = field(default_factory=list)
+    models: list[ParsedModel] = field(default_factory=list)
+    pages: list[ParsedPage] = field(default_factory=list)
+    entity_operations: list[EntityOperation] = field(default_factory=list)
     error: Optional[str] = None
 
 

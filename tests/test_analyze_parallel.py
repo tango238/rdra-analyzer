@@ -1,5 +1,4 @@
 """リポジトリ並列解析ヘルパーの単体テスト"""
-import pytest
 from analyzer.source_parser import RepoParseResult
 
 
