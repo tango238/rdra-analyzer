@@ -27,8 +27,9 @@ Typer を使用したCLIインターフェース。
 
 import json
 import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 import typer
 from rich.console import Console
@@ -243,6 +244,53 @@ def _parse_single_repo(repo_path: Path, parser) -> "RepoParseResult":
             success=False,
             error=f"{type(e).__name__}: {e}",
         )
+
+
+def _run_parallel_parse(
+    pending_repos: list[Path],
+    parser,
+    parallel: int,
+    on_complete: Optional[Callable] = None,
+) -> tuple[list, list]:
+    """
+    pending_repos を ThreadPoolExecutor で並列に parse する。
+
+    共有状態（all_routes, completed_repos, checkpoint ファイル等）の更新は
+    呼び出し側の責務。このヘルパーは結果を (successes, failures) に分ける
+    だけで、on_complete コールバック経由で呼び出し側にメインスレッドで
+    1 件ずつ通知する（as_completed の順序 = 完了順）。
+
+    Args:
+        pending_repos: 解析対象のリポジトリパス一覧（completed_repos を除外済み）
+        parser: SourceParser インスタンス（全ワーカーで共有される）
+        parallel: max_workers（_resolve_parallel で解決済みの値）
+        on_complete: 各 Future 完了時にメインスレッドで呼ばれる callback。
+                     シグネチャ: (RepoParseResult) -> None
+
+    Returns:
+        (successes, failures) の 2 タプル。各要素は RepoParseResult のリスト。
+    """
+    successes: list = []
+    failures: list = []
+
+    if not pending_repos:
+        return successes, failures
+
+    with ThreadPoolExecutor(max_workers=parallel) as executor:
+        futures = [
+            executor.submit(_parse_single_repo, rp, parser)
+            for rp in pending_repos
+        ]
+        for future in as_completed(futures):
+            result = future.result()
+            if on_complete is not None:
+                on_complete(result)
+            if result.success:
+                successes.append(result)
+            else:
+                failures.append(result)
+
+    return successes, failures
 
 
 @app.command("analyze")

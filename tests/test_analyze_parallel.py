@@ -5,7 +5,7 @@ import pytest
 import typer
 
 from analyzer.source_parser import RepoParseResult
-from main import _parse_single_repo, _resolve_parallel
+from main import _parse_single_repo, _resolve_parallel, _run_parallel_parse
 
 
 class TestRepoParseResult:
@@ -114,3 +114,120 @@ class TestParseSingleRepo:
 
         assert result.success is True
         assert result.entity_operations == []
+
+
+class TestRunParallelParse:
+    def _make_parser(self, per_repo_fn):
+        """per_repo_fn: (repo_path) -> dict または raises"""
+        parser = MagicMock()
+        parser.parse_repo.side_effect = per_repo_fn
+        return parser
+
+    def test_all_successes_returned_as_list(self, tmp_path):
+        repos = []
+        for name in ["r1", "r2", "r3"]:
+            p = tmp_path / name
+            p.mkdir()
+            repos.append(p)
+
+        def fake_parse(rp):
+            return {
+                "routes": [f"{rp.name}-route"],
+                "controllers": [],
+                "models": [f"{rp.name}-model"],
+                "pages": [],
+                "entity_operations": [],
+            }
+        parser = self._make_parser(fake_parse)
+
+        successes, failures = _run_parallel_parse(
+            pending_repos=repos, parser=parser, parallel=2,
+        )
+
+        assert len(successes) == 3
+        assert len(failures) == 0
+        names = {r.repo_name for r in successes}
+        assert names == {"r1", "r2", "r3"}
+
+    def test_mixed_success_and_failure_partitioned(self, tmp_path):
+        repos = []
+        for name in ["good1", "bad", "good2"]:
+            p = tmp_path / name
+            p.mkdir()
+            repos.append(p)
+
+        def fake_parse(rp):
+            if rp.name == "bad":
+                raise ValueError("boom")
+            return {
+                "routes": [], "controllers": [], "models": [],
+                "pages": [], "entity_operations": [],
+            }
+        parser = self._make_parser(fake_parse)
+
+        successes, failures = _run_parallel_parse(
+            pending_repos=repos, parser=parser, parallel=2,
+        )
+
+        assert len(successes) == 2
+        assert len(failures) == 1
+        assert failures[0].repo_name == "bad"
+        assert "boom" in failures[0].error
+        success_names = {r.repo_name for r in successes}
+        assert success_names == {"good1", "good2"}
+
+    def test_on_complete_fires_for_every_result(self, tmp_path):
+        repos = []
+        for name in ["a", "b", "c"]:
+            p = tmp_path / name
+            p.mkdir()
+            repos.append(p)
+
+        def fake_parse(rp):
+            if rp.name == "b":
+                raise RuntimeError("fail")
+            return {
+                "routes": [], "controllers": [], "models": [],
+                "pages": [], "entity_operations": [],
+            }
+        parser = self._make_parser(fake_parse)
+
+        seen = []
+        def on_complete(result):
+            seen.append((result.repo_name, result.success))
+
+        _run_parallel_parse(
+            pending_repos=repos, parser=parser, parallel=2,
+            on_complete=on_complete,
+        )
+
+        assert len(seen) == 3
+        seen_by_name = dict(seen)
+        assert seen_by_name["a"] is True
+        assert seen_by_name["b"] is False
+        assert seen_by_name["c"] is True
+
+    def test_empty_pending_repos_returns_empty(self, tmp_path):
+        parser = MagicMock()
+        successes, failures = _run_parallel_parse(
+            pending_repos=[], parser=parser, parallel=4,
+        )
+        assert successes == []
+        assert failures == []
+        parser.parse_repo.assert_not_called()
+
+    def test_parallel_one_runs_serially(self, tmp_path):
+        repos = [tmp_path / f"r{i}" for i in range(3)]
+        for r in repos:
+            r.mkdir()
+        parser = self._make_parser(lambda rp: {
+            "routes": [], "controllers": [], "models": [],
+            "pages": [], "entity_operations": [],
+        })
+
+        successes, failures = _run_parallel_parse(
+            pending_repos=repos, parser=parser, parallel=1,
+        )
+
+        assert len(successes) == 3
+        assert len(failures) == 0
