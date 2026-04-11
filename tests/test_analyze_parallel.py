@@ -95,7 +95,7 @@ class TestParseSingleRepo:
 
         assert result.success is False
         assert result.repo_name == "bad"
-        assert result.error == "LLM timeout after 120s"
+        assert result.error == "RuntimeError: LLM timeout after 120s"
         assert result.routes == []
         assert result.models == []
 

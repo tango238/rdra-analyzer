@@ -216,7 +216,8 @@ def _parse_single_repo(repo_path: Path, parser) -> "RepoParseResult":
     並列ワーカー: 1 リポジトリを解析し RepoParseResult を返す。
 
     例外は catch して success=False で包んで返すので、呼び出し側は
-    Future.result() を例外ハンドリングなしで受け取れる。
+    Future.result() を例外ハンドリングなしで受け取れる。BaseException は
+    意図的に捕捉しない（Ctrl-C で停止可能にするため）。
 
     ここでは build_context() を呼ばない。context は並列実行の外で
     config.repo_paths 順に事前構築する必要があるため。
@@ -240,7 +241,7 @@ def _parse_single_repo(repo_path: Path, parser) -> "RepoParseResult":
         return RepoParseResult(
             repo_name=repo_name,
             success=False,
-            error=str(e),
+            error=f"{type(e).__name__}: {e}",
         )
 
 
