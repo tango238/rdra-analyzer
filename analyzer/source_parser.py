@@ -85,6 +85,25 @@ class EntityOperation:
     call_chain: list[str] = field(default_factory=list)  # コール階層
 
 
+@dataclass
+class RepoParseResult:
+    """
+    並列解析ワーカーがメインスレッドに返す結果コンテナ。
+
+    成功・失敗を同一の型で扱うことで、Future.result() の呼び出し側が
+    例外ハンドリングを個別に書かなくて済む。context は並列処理の外で
+    prebuild するため、このクラスには含めない。
+    """
+    repo_name: str
+    success: bool
+    routes: list = field(default_factory=list)
+    controllers: list = field(default_factory=list)
+    models: list = field(default_factory=list)
+    pages: list = field(default_factory=list)
+    entity_operations: list = field(default_factory=list)
+    error: Optional[str] = None
+
+
 class SourceParser:
     """
     LLM駆動の汎用ソースコードパーサー。
