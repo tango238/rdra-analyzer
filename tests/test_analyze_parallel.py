@@ -1,5 +1,9 @@
 """リポジトリ並列解析ヘルパーの単体テスト"""
+import pytest
+import typer
+
 from analyzer.source_parser import RepoParseResult
+from main import _resolve_parallel
 
 
 class TestRepoParseResult:
@@ -28,3 +32,27 @@ class TestRepoParseResult:
         b = RepoParseResult(repo_name="b", success=True)
         a.routes.append("x")
         assert b.routes == []
+
+
+class TestResolveParallel:
+    def test_zero_with_two_repos_returns_two(self):
+        assert _resolve_parallel(0, 2) == 2
+
+    def test_zero_with_many_repos_caps_at_four(self):
+        assert _resolve_parallel(0, 10) == 4
+
+    def test_zero_with_one_repo_returns_one(self):
+        assert _resolve_parallel(0, 1) == 1
+
+    def test_explicit_one_returns_one(self):
+        assert _resolve_parallel(1, 5) == 1
+
+    def test_explicit_exceeds_repos_preserved(self):
+        assert _resolve_parallel(8, 3) == 8
+
+    def test_negative_raises_bad_parameter(self):
+        with pytest.raises(typer.BadParameter):
+            _resolve_parallel(-1, 5)
+
+    def test_zero_with_empty_returns_one(self):
+        assert _resolve_parallel(0, 0) == 1

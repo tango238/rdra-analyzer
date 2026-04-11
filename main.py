@@ -185,6 +185,28 @@ def _load_parse_checkpoint(checkpoint_path: Path) -> dict | None:
     }
 
 
+def _resolve_parallel(parallel: int, repo_count: int) -> int:
+    """
+    CLI `--parallel` 値を実行時の並列度に解決する。
+
+    Args:
+        parallel: CLI 引数値。0 は自動、1 以上はそのまま、負数はエラー。
+        repo_count: 対象リポジトリ数。
+
+    Returns:
+        実際に ThreadPoolExecutor に渡す max_workers 値。
+        repo_count が 0 の場合でも安全な値（1）を返す。
+
+    Raises:
+        typer.BadParameter: parallel が負の値のとき。
+    """
+    if parallel < 0:
+        raise typer.BadParameter("--parallel must be >= 0")
+    if parallel == 0:
+        return min(4, repo_count) if repo_count > 0 else 1
+    return parallel
+
+
 @app.command("analyze")
 def run_analyze(
     repo: Optional[list[str]] = typer.Option(
