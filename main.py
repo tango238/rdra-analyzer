@@ -421,6 +421,9 @@ def run_analyze(
             f"{len(pending_repos)} リポジトリを解析中..."
         )
 
+        # _on_repo_complete runs on the main thread inside _run_parallel_parse's
+        # as_completed loop, so list mutations are lock-free. Any exception here
+        # propagates out; partial checkpoint state is preserved for --resume.
         def _on_repo_complete(result):
             if result.success:
                 all_routes.extend(result.routes)
@@ -430,7 +433,7 @@ def run_analyze(
                 all_entity_operations.extend(result.entity_operations)
                 completed_repos.add(result.repo_name)
                 console.print(
-                    f"  ✓ {result.repo_name}: "
+                    f"  [green]OK[/green] {result.repo_name}: "
                     f"ルート {len(result.routes)} / "
                     f"モデル {len(result.models)} / "
                     f"ページ {len(result.pages)} / "
@@ -445,7 +448,7 @@ def run_analyze(
             else:
                 failed_repos.append((result.repo_name, result.error))
                 console.print(
-                    f"  [red]✗ {result.repo_name}: 失敗 - {result.error}[/red]"
+                    f"  [red]NG {result.repo_name}: 失敗 - {result.error}[/red]"
                 )
 
         _run_parallel_parse(
@@ -461,7 +464,7 @@ def run_analyze(
             f"[red]失敗: {len(failed_repos)}[/red]"
         )
         for name, err in failed_repos:
-            console.print(f"  [red]失敗リポ: {name}[/red]")
+            console.print(f"  [red]失敗リポ: {name} - {err}[/red]")
         console.print(
             "  [yellow]--resume で再実行すると失敗したリポだけ再試行されます[/yellow]"
         )
