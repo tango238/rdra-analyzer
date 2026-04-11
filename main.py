@@ -185,6 +185,9 @@ def _load_parse_checkpoint(checkpoint_path: Path) -> dict | None:
     }
 
 
+_DEFAULT_AUTO_PARALLEL_CAP = 4  # LLM レート制限を考慮した保守的な上限
+
+
 def _resolve_parallel(parallel: int, repo_count: int) -> int:
     """
     CLI `--parallel` 値を実行時の並列度に解決する。
@@ -195,6 +198,7 @@ def _resolve_parallel(parallel: int, repo_count: int) -> int:
 
     Returns:
         実際に ThreadPoolExecutor に渡す max_workers 値。
+        parallel=0 の場合は min(_DEFAULT_AUTO_PARALLEL_CAP, repo_count)。
         repo_count が 0 の場合でも安全な値（1）を返す。
 
     Raises:
@@ -203,7 +207,7 @@ def _resolve_parallel(parallel: int, repo_count: int) -> int:
     if parallel < 0:
         raise typer.BadParameter("--parallel must be >= 0")
     if parallel == 0:
-        return min(4, repo_count) if repo_count > 0 else 1
+        return min(_DEFAULT_AUTO_PARALLEL_CAP, repo_count) if repo_count > 0 else 1
     return parallel
 
 
