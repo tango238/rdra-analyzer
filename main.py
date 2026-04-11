@@ -327,6 +327,10 @@ def run_analyze(
     batch_size: int = typer.Option(
         5, "--batch-size", "-b", help="画面分析の1バッチあたりのページ数"
     ),
+    parallel: int = typer.Option(
+        0, "--parallel", "-j",
+        help="リポジトリ並列度（0=自動: min(4, リポ数)、1=直列）"
+    ),
 ):
     """
     パート1: ソースコード解析 → ユースケース抽出 → 画面分析
@@ -386,62 +390,83 @@ def run_analyze(
     from analyzer.project_context import format_context_for_prompt, build_context
     parser = SourceParser(llm_provider=llm)
 
+    # 全リポの context を順序通り prebuild（軽量処理、並列化不要）
     for repo_path in config.repo_paths:
-        repo_name = str(repo_path.name)
-
-        # コンテキストは常に構築（再開時も必要）
         ctx = build_context(repo_path)
         all_contexts.append(ctx)
-
+        repo_name = repo_path.name
         if repo_name in completed_repos:
-            console.print(f"  [dim]リポジトリ: {repo_name} (チェックポイントからスキップ)[/dim]")
+            console.print(
+                f"  [dim]リポジトリ: {repo_name} (チェックポイントからスキップ)[/dim]"
+            )
             continue
-
         console.print(f"  [bold]リポジトリ: {repo_name}[/bold]")
         for ctx_file in ["CLAUDE.md", "AGENTS.md"]:
             if (repo_path / ctx_file).exists():
                 console.print(f"    [dim]{ctx_file} を検出[/dim]")
-
-        # 各ステップを個別に実行し、ステップごとに保存
-        steps = [
-            ("ルート", "routes"),
-            ("コントローラー", "controllers"),
-            ("モデル", "models"),
-            ("ページ", "pages"),
-        ]
-        result = parser.parse_repo(repo_path)
-
-        for step_name, key in steps:
-            items = result[key]
-            count = len(items)
-            console.print(f"    -> {step_name}: {count}件")
-            if key == "routes":
-                all_routes.extend(items)
-            elif key == "controllers":
-                all_controllers.extend(items)
-            elif key == "models":
-                all_models.extend(items)
-            elif key == "pages":
-                all_pages.extend(items)
-
-        repo_entity_ops = result.get("entity_operations", [])
-        if repo_entity_ops:
-            all_entity_operations.extend(repo_entity_ops)
-            console.print(f"    -> エンティティ操作: {len(repo_entity_ops)}件")
-
         if ctx.detected_stacks:
-            console.print(f"    -> 技術スタック: {', '.join(ctx.detected_stacks)}")
+            console.print(f"    [dim]技術スタック: {', '.join(ctx.detected_stacks)}[/dim]")
 
-        completed_repos.add(repo_name)
+    pending_repos = [
+        rp for rp in config.repo_paths
+        if rp.name not in completed_repos
+    ]
 
-        # リポジトリごとにチェックポイント保存
-        _save_parse_checkpoint({
-            "routes": all_routes, "controllers": all_controllers,
-            "models": all_models, "pages": all_pages,
-            "entity_operations": all_entity_operations,
-            "completed_repos": list(completed_repos), "phase": "parse",
-        }, checkpoint_path)
-        console.print(f"    [dim]-> チェックポイント保存: {checkpoint_path}[/dim]")
+    effective_parallel = _resolve_parallel(parallel, len(config.repo_paths))
+    failed_repos: list[tuple[str, str]] = []
+
+    if pending_repos:
+        console.print(
+            f"\n  [並列度 {effective_parallel}] "
+            f"{len(pending_repos)} リポジトリを解析中..."
+        )
+
+        def _on_repo_complete(result):
+            if result.success:
+                all_routes.extend(result.routes)
+                all_controllers.extend(result.controllers)
+                all_models.extend(result.models)
+                all_pages.extend(result.pages)
+                all_entity_operations.extend(result.entity_operations)
+                completed_repos.add(result.repo_name)
+                console.print(
+                    f"  ✓ {result.repo_name}: "
+                    f"ルート {len(result.routes)} / "
+                    f"モデル {len(result.models)} / "
+                    f"ページ {len(result.pages)} / "
+                    f"エンティティ操作 {len(result.entity_operations)}"
+                )
+                _save_parse_checkpoint({
+                    "routes": all_routes, "controllers": all_controllers,
+                    "models": all_models, "pages": all_pages,
+                    "entity_operations": all_entity_operations,
+                    "completed_repos": list(completed_repos), "phase": "parse",
+                }, checkpoint_path)
+            else:
+                failed_repos.append((result.repo_name, result.error))
+                console.print(
+                    f"  [red]✗ {result.repo_name}: 失敗 - {result.error}[/red]"
+                )
+
+        _run_parallel_parse(
+            pending_repos=pending_repos,
+            parser=parser,
+            parallel=effective_parallel,
+            on_complete=_on_repo_complete,
+        )
+
+    if failed_repos:
+        console.print(
+            f"\n  [green]成功: {len(completed_repos)}/{len(config.repo_paths)}[/green] | "
+            f"[red]失敗: {len(failed_repos)}[/red]"
+        )
+        for name, err in failed_repos:
+            console.print(f"  [red]失敗リポ: {name}[/red]")
+        console.print(
+            "  [yellow]--resume で再実行すると失敗したリポだけ再試行されます[/yellow]"
+        )
+        if len(failed_repos) == len(pending_repos) and pending_repos:
+            raise typer.Exit(1)
 
     routes = all_routes[:max_routes]
 
