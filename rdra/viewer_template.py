@@ -605,7 +605,10 @@ function _routeToCrud(routes) {{
 }}
 function _ucEntityCrud(uc, entityClassName) {{
   // DATA.uc_entity_crud から参照 (Python 側で事前計算済み)
-  return new Set(((DATA.uc_entity_crud||{{}})[uc.id]||{{}})[entityClassName] || []);
+  const precomputed = ((DATA.uc_entity_crud||{{}})[uc.id]||{{}})[entityClassName];
+  if (precomputed && precomputed.length > 0) return new Set(precomputed);
+  // フォールバック: regenerate 等で uc_entity_crud が空の場合は HTTP メソッドから推定
+  return _routeToCrud(uc.related_routes||[]);
 }}
 function _ucCrud(uc) {{
   // UC の全 related_entities にわたる CRUD 集合
