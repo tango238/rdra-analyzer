@@ -27,8 +27,12 @@ Typer を使用したCLIインターフェース。
 
 import json
 import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Callable, Optional
+
+if TYPE_CHECKING:
+    from analyzer.source_parser import RepoParseResult
 
 import typer
 from rich.console import Console
@@ -185,6 +189,121 @@ def _load_parse_checkpoint(checkpoint_path: Path) -> dict | None:
     }
 
 
+_DEFAULT_AUTO_PARALLEL_CAP = 4  # LLM レート制限を考慮した保守的な上限
+
+
+def _resolve_parallel(parallel: int, repo_count: int) -> int:
+    """
+    CLI `--parallel` 値を実行時の並列度に解決する。
+
+    Args:
+        parallel: CLI 引数値。0 は自動、1 以上はそのまま、負数はエラー。
+        repo_count: 対象リポジトリ数。
+
+    Returns:
+        実際に ThreadPoolExecutor に渡す max_workers 値。
+        parallel=0 の場合は min(_DEFAULT_AUTO_PARALLEL_CAP, repo_count)。
+        repo_count が 0 の場合でも安全な値（1）を返す。
+
+    Raises:
+        typer.BadParameter: parallel が負の値のとき。
+    """
+    if parallel < 0:
+        raise typer.BadParameter("--parallel must be >= 0")
+    if parallel == 0:
+        return min(_DEFAULT_AUTO_PARALLEL_CAP, repo_count) if repo_count > 0 else 1
+    return parallel
+
+
+def _parse_single_repo(repo_path: Path, parser) -> "RepoParseResult":
+    """
+    並列ワーカー: 1 リポジトリを解析し RepoParseResult を返す。
+
+    例外は catch して success=False で包んで返すので、呼び出し側は
+    Future.result() を例外ハンドリングなしで受け取れる。BaseException は
+    意図的に捕捉しない（Ctrl-C で停止可能にするため）。
+
+    ここでは build_context() を呼ばない。context は並列実行の外で
+    config.repo_paths 順に事前構築する必要があるため。
+    （parse_repo 内部では独自に build_context を呼ぶがそれは LLM プロンプト用）
+    """
+    from analyzer.source_parser import RepoParseResult
+
+    repo_name = repo_path.name
+    try:
+        result = parser.parse_repo(repo_path)
+        return RepoParseResult(
+            repo_name=repo_name,
+            success=True,
+            routes=result["routes"],
+            controllers=result["controllers"],
+            models=result["models"],
+            pages=result["pages"],
+            entity_operations=result.get("entity_operations", []),
+        )
+    except Exception as e:
+        return RepoParseResult(
+            repo_name=repo_name,
+            success=False,
+            error=f"{type(e).__name__}: {e}",
+        )
+
+
+def _run_parallel_parse(
+    pending_repos: list[Path],
+    parser,
+    parallel: int,
+    on_complete: Optional[Callable[["RepoParseResult"], None]] = None,
+) -> tuple[list["RepoParseResult"], list["RepoParseResult"]]:
+    """
+    pending_repos を ThreadPoolExecutor で並列に parse する。
+
+    共有状態（all_routes, completed_repos, checkpoint ファイル等）の更新は
+    呼び出し側の責務。このヘルパーは結果を (successes, failures) に分ける
+    だけで、on_complete コールバック経由で呼び出し側にメインスレッドで
+    1 件ずつ通知する（as_completed の順序 = 完了順）。
+
+    Args:
+        pending_repos: 解析対象のリポジトリパス一覧（completed_repos を除外済み）
+        parser: SourceParser インスタンス（全ワーカーで共有される）。
+                parse_repo(repo_path) はスレッドセーフである必要がある。
+        parallel: max_workers（_resolve_parallel で解決済みの値）
+        on_complete: 各 Future 完了時にメインスレッドで呼ばれる callback。
+                     シグネチャ: (RepoParseResult) -> None
+
+    Returns:
+        (successes, failures) の 2 タプル。各要素は RepoParseResult のリスト。
+
+    Note:
+        on_complete が例外を送出した場合、例外はそのまま呼び出し側に伝播する。
+        ThreadPoolExecutor の context manager は残りの future 完了を待ってから
+        抜けるため、実行中のワーカーはキャンセルされずに完走する（結果は破棄）。
+        checkpoint はその例外より前の on_complete 呼び出しで書き込まれた状態が
+        残る。
+    """
+    successes: list["RepoParseResult"] = []
+    failures: list["RepoParseResult"] = []
+
+    if not pending_repos:
+        return successes, failures
+
+    with ThreadPoolExecutor(max_workers=parallel) as executor:
+        futures = [
+            executor.submit(_parse_single_repo, rp, parser)
+            for rp in pending_repos
+        ]
+        for future in as_completed(futures):
+            result = future.result()
+            if on_complete is not None:
+                on_complete(result)
+            if result.success:
+                successes.append(result)
+            else:
+                failures.append(result)
+
+    return successes, failures
+
+
 @app.command("analyze")
 def run_analyze(
     repo: Optional[list[str]] = typer.Option(
@@ -207,6 +326,10 @@ def run_analyze(
     ),
     batch_size: int = typer.Option(
         5, "--batch-size", "-b", help="画面分析の1バッチあたりのページ数"
+    ),
+    parallel: int = typer.Option(
+        0, "--parallel", "-j",
+        help="リポジトリ並列度（0=自動: min(4, リポ数)、1=直列）"
     ),
 ):
     """
@@ -267,62 +390,86 @@ def run_analyze(
     from analyzer.project_context import format_context_for_prompt, build_context
     parser = SourceParser(llm_provider=llm)
 
+    # 全リポの context を順序通り prebuild（軽量処理、並列化不要）
     for repo_path in config.repo_paths:
-        repo_name = str(repo_path.name)
-
-        # コンテキストは常に構築（再開時も必要）
         ctx = build_context(repo_path)
         all_contexts.append(ctx)
-
+        repo_name = repo_path.name
         if repo_name in completed_repos:
-            console.print(f"  [dim]リポジトリ: {repo_name} (チェックポイントからスキップ)[/dim]")
+            console.print(
+                f"  [dim]リポジトリ: {repo_name} (チェックポイントからスキップ)[/dim]"
+            )
             continue
-
         console.print(f"  [bold]リポジトリ: {repo_name}[/bold]")
         for ctx_file in ["CLAUDE.md", "AGENTS.md"]:
             if (repo_path / ctx_file).exists():
                 console.print(f"    [dim]{ctx_file} を検出[/dim]")
-
-        # 各ステップを個別に実行し、ステップごとに保存
-        steps = [
-            ("ルート", "routes"),
-            ("コントローラー", "controllers"),
-            ("モデル", "models"),
-            ("ページ", "pages"),
-        ]
-        result = parser.parse_repo(repo_path)
-
-        for step_name, key in steps:
-            items = result[key]
-            count = len(items)
-            console.print(f"    -> {step_name}: {count}件")
-            if key == "routes":
-                all_routes.extend(items)
-            elif key == "controllers":
-                all_controllers.extend(items)
-            elif key == "models":
-                all_models.extend(items)
-            elif key == "pages":
-                all_pages.extend(items)
-
-        repo_entity_ops = result.get("entity_operations", [])
-        if repo_entity_ops:
-            all_entity_operations.extend(repo_entity_ops)
-            console.print(f"    -> エンティティ操作: {len(repo_entity_ops)}件")
-
         if ctx.detected_stacks:
-            console.print(f"    -> 技術スタック: {', '.join(ctx.detected_stacks)}")
+            console.print(f"    [dim]技術スタック: {', '.join(ctx.detected_stacks)}[/dim]")
 
-        completed_repos.add(repo_name)
+    pending_repos = [
+        rp for rp in config.repo_paths
+        if rp.name not in completed_repos
+    ]
 
-        # リポジトリごとにチェックポイント保存
-        _save_parse_checkpoint({
-            "routes": all_routes, "controllers": all_controllers,
-            "models": all_models, "pages": all_pages,
-            "entity_operations": all_entity_operations,
-            "completed_repos": list(completed_repos), "phase": "parse",
-        }, checkpoint_path)
-        console.print(f"    [dim]-> チェックポイント保存: {checkpoint_path}[/dim]")
+    effective_parallel = _resolve_parallel(parallel, len(pending_repos))
+    failed_repos: list[tuple[str, str]] = []
+
+    if pending_repos:
+        console.print(
+            f"\n  [並列度 {effective_parallel}] "
+            f"{len(pending_repos)} リポジトリを解析中..."
+        )
+
+        # _on_repo_complete runs on the main thread inside _run_parallel_parse's
+        # as_completed loop, so list mutations are lock-free. Any exception here
+        # propagates out; partial checkpoint state is preserved for --resume.
+        def _on_repo_complete(result):
+            if result.success:
+                all_routes.extend(result.routes)
+                all_controllers.extend(result.controllers)
+                all_models.extend(result.models)
+                all_pages.extend(result.pages)
+                all_entity_operations.extend(result.entity_operations)
+                completed_repos.add(result.repo_name)
+                console.print(
+                    f"  [green]OK[/green] {result.repo_name}: "
+                    f"ルート {len(result.routes)} / "
+                    f"モデル {len(result.models)} / "
+                    f"ページ {len(result.pages)} / "
+                    f"エンティティ操作 {len(result.entity_operations)}"
+                )
+                _save_parse_checkpoint({
+                    "routes": all_routes, "controllers": all_controllers,
+                    "models": all_models, "pages": all_pages,
+                    "entity_operations": all_entity_operations,
+                    "completed_repos": list(completed_repos), "phase": "parse",
+                }, checkpoint_path)
+            else:
+                failed_repos.append((result.repo_name, result.error))
+                console.print(
+                    f"  [red]NG {result.repo_name}: 失敗 - {result.error}[/red]"
+                )
+
+        _run_parallel_parse(
+            pending_repos=pending_repos,
+            parser=parser,
+            parallel=effective_parallel,
+            on_complete=_on_repo_complete,
+        )
+
+    if failed_repos:
+        console.print(
+            f"\n  [green]成功: {len(completed_repos)}/{len(config.repo_paths)}[/green] | "
+            f"[red]失敗: {len(failed_repos)}[/red]"
+        )
+        for name, err in failed_repos:
+            console.print(f"  [red]失敗リポ: {name} - {err}[/red]")
+        console.print(
+            "  [yellow]--resume で再実行すると失敗したリポだけ再試行されます[/yellow]"
+        )
+        if len(failed_repos) == len(config.repo_paths):
+            raise typer.Exit(1)
 
     routes = all_routes[:max_routes]
 
@@ -1375,6 +1522,10 @@ def run_all(
     base_url: Optional[str] = typer.Option(
         None, "--url", "-u", help="E2EテストのベースURL"
     ),
+    parallel: int = typer.Option(
+        0, "--parallel", "-j",
+        help="リポジトリ並列度（0=自動: min(4, リポ数)、1=直列）"
+    ),
 ):
     """
     全パートを順番に実行する。
@@ -1404,6 +1555,7 @@ def run_all(
         output_dir=output_dir,
         max_routes=200,
         skip_llm=False,
+        parallel=parallel,
     )
     if result is None:
         raise typer.Exit(1)
