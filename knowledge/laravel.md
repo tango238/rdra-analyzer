@@ -82,6 +82,14 @@ class UserController extends Controller {
 | Update | `$parent->children()->update([...])` |
 | Delete | `$parent->children()->delete()`, `$parent->children()->detach()` (多対多) |
 
+### Facade・認証系の操作
+| CRUD | メソッド/パターン |
+|------|-----------------|
+| Update | `Password::sendResetLink([...])` (パスワードリセット系 facade → 内部で token を DB に保存) |
+| Update | `Auth::user()->update([...])`, `auth()->user()->save()` (認証ユーザー直接更新) |
+| Update | `$user->password = bcrypt(...); $user->save()` (パスワード変更の直接パターン) |
+| Create | `Password::createToken($user)` (リセットトークン生成) |
+
 ## コール階層
 
 > **注意**: 対象プロジェクトの CLAUDE.md または AGENTS.md にアーキテクチャ構成や
