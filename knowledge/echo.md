@@ -55,3 +55,41 @@ func (h *Handler) ListUsers(c echo.Context) error {
     return c.JSON(http.StatusOK, users)
 }
 ```
+
+## CRUD操作パターン
+
+> **注意**: 対象プロジェクトの CLAUDE.md または AGENTS.md にCRUD操作パターンや
+> データアクセス層の規約が記載されている場合は、そちらを優先すること。
+> 以下はフレームワークの一般的なパターンであり、フォールバックとして参照する。
+
+### GORM 操作
+| CRUD | メソッド/パターン |
+|------|-----------------|
+| Create | `db.Create(&model)`, `db.CreateInBatches(&models, batchSize)` |
+| Read | `db.First(&model, id)`, `db.Find(&models)`, `db.Where(...).Find(&models)`, `db.Take(&model)` |
+| Update | `db.Save(&model)`, `db.Model(&model).Update(...)`, `db.Model(&model).Updates(...)` |
+| Delete | `db.Delete(&model, id)`, `db.Where(...).Delete(&Model{})` |
+
+### ent 操作
+| CRUD | メソッド/パターン |
+|------|-----------------|
+| Create | `client.User.Create().Set*(...).Save(ctx)` |
+| Read | `client.User.Get(ctx, id)`, `client.User.Query().Where(...).All(ctx)` |
+| Update | `client.User.UpdateOneID(id).Set*(...).Save(ctx)`, `client.User.Update().Where(...).Save(ctx)` |
+| Delete | `client.User.DeleteOneID(id).Exec(ctx)`, `client.User.Delete().Where(...).Exec(ctx)` |
+
+## コール階層
+
+> **注意**: 対象プロジェクトの CLAUDE.md または AGENTS.md にアーキテクチャ構成や
+> レイヤー間の呼び出し規約が記載されている場合は、そちらを優先すること。
+> 以下はフレームワークの典型的なパターンであり、フォールバックとして参照する。
+
+### パターン1: Handler → Service → Repository
+- Gin と同一パターン（Go の標準的なレイヤリング）
+```go
+func (h *OrderHandler) CreateOrder(c echo.Context) error {
+    order, err := h.service.CreateOrder(c.Request().Context(), &input)
+    // ...
+}
+```
+コール階層の詳細は gin.md のパターンを参照。

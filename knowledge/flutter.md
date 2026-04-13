@@ -80,3 +80,45 @@ class UserRepository {
 ## 特記事項
 - Flutter はフロントエンド（モバイル/Web）のみ。バックエンドAPIは別リポジトリの場合が多い
 - 画面遷移とAPI呼び出しパターンからユースケースを推定する
+
+## CRUD操作パターン
+
+> Flutter はモバイル/Web フロントエンドフレームワークのため、エンティティに対するCRUD操作は
+> バックエンドAPI経由で行われる。Flutter 側にはサーバーサイドのCRUD操作パターンは存在しない。
+> バックエンドのフレームワーク（Laravel, Spring Boot, FastAPI等）のknowledgeを参照すること。
+
+### ローカルDB操作（sqflite / Drift）
+- オフラインキャッシュやローカルストレージ用途で Flutter 内でDB操作を行う場合がある
+
+| CRUD | sqflite | Drift |
+|------|---------|-------|
+| Create | `db.insert('table', data)` | `into(table).insert(companion)` |
+| Read | `db.query('table')`, `db.rawQuery('SELECT ...')` | `select(table).get()`, `(select(table)..where(...)).get()` |
+| Update | `db.update('table', data, where: ...)` | `(update(table)..where(...)).write(companion)` |
+| Delete | `db.delete('table', where: ...)` | `(delete(table)..where(...)).go()` |
+
+## コール階層
+
+> Flutter のコール階層は主にAPIクライアント経由のためサーバーサイドのknowledgeを参照。
+> ローカルDB操作がある場合は以下のパターンを参照する。
+
+### パターン1: Screen → Repository → API
+```dart
+// API経由（サーバーサイドのCRUD）
+class OrderRepository {
+    Future<Order> createOrder(OrderInput input) async {
+        final response = await dio.post('/api/orders', data: input.toJson());
+        return Order.fromJson(response.data);
+    }
+}
+```
+
+### パターン2: Screen → Repository → Local DB
+```dart
+// ローカルDB操作
+class CacheRepository {
+    Future<void> cacheOrder(Order order) async {
+        await db.insert('orders', order.toMap());          // Order: Create (local)
+    }
+}
+```

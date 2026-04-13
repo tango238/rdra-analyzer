@@ -65,3 +65,61 @@ func (h *Handler) ListUsers(c *gin.Context) {
     c.JSON(http.StatusOK, users)
 }
 ```
+
+## CRUD操作パターン
+
+> **注意**: 対象プロジェクトの CLAUDE.md または AGENTS.md にCRUD操作パターンや
+> データアクセス層の規約が記載されている場合は、そちらを優先すること。
+> 以下はフレームワークの一般的なパターンであり、フォールバックとして参照する。
+
+### GORM 操作
+| CRUD | メソッド/パターン |
+|------|-----------------|
+| Create | `db.Create(&model)`, `db.CreateInBatches(&models, batchSize)` |
+| Read | `db.First(&model, id)`, `db.Find(&models)`, `db.Where(...).Find(&models)`, `db.Take(&model)` |
+| Update | `db.Save(&model)`, `db.Model(&model).Update(...)`, `db.Model(&model).Updates(...)`, `db.Where(...).Update(...)` |
+| Delete | `db.Delete(&model, id)`, `db.Where(...).Delete(&Model{})`, `db.Unscoped().Delete(&model)` (hard delete) |
+
+### database/sql 直接操作
+| CRUD | メソッド/パターン |
+|------|-----------------|
+| Create | `db.Exec("INSERT INTO ...")`, `db.ExecContext(ctx, "INSERT INTO ...")` |
+| Read | `db.Query("SELECT ...")`, `db.QueryRow("SELECT ...")`, `db.QueryContext(...)` |
+| Update | `db.Exec("UPDATE ...")` |
+| Delete | `db.Exec("DELETE FROM ...")` |
+
+## コール階層
+
+> **注意**: 対象プロジェクトの CLAUDE.md または AGENTS.md にアーキテクチャ構成や
+> レイヤー間の呼び出し規約が記載されている場合は、そちらを優先すること。
+> 以下はフレームワークの典型的なパターンであり、フォールバックとして参照する。
+
+### パターン1: Handler → Service → Repository
+```go
+// handler
+func (h *OrderHandler) CreateOrder(c *gin.Context) {
+    order, err := h.service.CreateOrder(c.Request.Context(), &input)
+    // ...
+}
+// service
+func (s *OrderService) CreateOrder(ctx context.Context, input *OrderInput) (*Order, error) {
+    order, err := s.orderRepo.Create(ctx, input)            // Order: Create
+    err = s.stockRepo.Decrement(ctx, input.ProductID, qty)  // Stock: Update
+    return order, err
+}
+// repository
+func (r *OrderRepository) Create(ctx context.Context, input *OrderInput) (*Order, error) {
+    order := &Order{...}
+    return order, r.db.WithContext(ctx).Create(order).Error  // Order: Create
+}
+```
+
+### パターン2: Handler → Model（直接操作、小規模）
+```go
+func CreateOrder(c *gin.Context) {
+    var order Order
+    db.Create(&order)                                        // Order: Create
+    db.Model(&Stock{}).Where("product_id = ?", pid).
+        Update("qty", gorm.Expr("qty - ?", 1))              // Stock: Update
+}
+```

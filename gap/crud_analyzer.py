@@ -14,7 +14,7 @@ from datetime import datetime
 from rdra.information_model import Entity
 from analyzer.scenario_builder import OperationScenario
 from analyzer.usecase_extractor import Usecase
-from analyzer.source_parser import ParsedRoute
+from analyzer.source_parser import ParsedRoute, EntityOperation
 
 
 @dataclass
@@ -115,6 +115,7 @@ class CrudAnalyzer:
         routes: list[ParsedRoute],
         scenarios: list[OperationScenario],
         usecases: list[Usecase],
+        entity_operations: list[EntityOperation] = None,
     ) -> tuple[list[EntityCrudStatus], list[CrudGap]]:
         """
         エンティティごとにCRUDギャップを分析する。
@@ -124,6 +125,7 @@ class CrudAnalyzer:
             routes: 解析済みAPIルート一覧
             scenarios: 操作シナリオ一覧
             usecases: ユースケース一覧
+            entity_operations: エンティティ操作一覧（LLM検出結果）
 
         Returns:
             tuple[list[EntityCrudStatus], list[CrudGap]]:
@@ -132,7 +134,7 @@ class CrudAnalyzer:
         statuses: list[EntityCrudStatus] = []
 
         for entity in entities:
-            status = self._analyze_entity(entity, routes, scenarios, usecases)
+            status = self._analyze_entity(entity, routes, scenarios, usecases, entity_operations)
             statuses.append(status)
 
         # ギャップを抽出
@@ -146,6 +148,7 @@ class CrudAnalyzer:
         routes: list[ParsedRoute],
         scenarios: list[OperationScenario],
         usecases: list[Usecase],
+        entity_operations: list[EntityOperation] = None,
     ) -> EntityCrudStatus:
         """1エンティティのCRUDステータスを分析する"""
         status = EntityCrudStatus(
@@ -153,13 +156,17 @@ class CrudAnalyzer:
             class_name=entity.class_name,
         )
 
-        # ルートからCRUD操作を検出
-        self._check_routes(status, entity, routes)
+        # 1. EntityOperation からCRUD操作を検出（最優先）
+        if entity_operations:
+            self._check_entity_operations(status, entity, entity_operations)
 
-        # 操作シナリオからCRUD操作を検出
+        # 2. 操作シナリオからCRUD操作を検出（フォールバック）
         self._check_scenarios(status, entity, scenarios)
 
-        # ユースケースからCRUD操作を検出
+        # 3. ルートからCRUD操作を検出（フォールバック）
+        self._check_routes(status, entity, routes)
+
+        # 4. ユースケースからCRUD操作を検出（フォールバック）
         self._check_usecases(status, entity, usecases)
 
         return status
@@ -290,6 +297,35 @@ class CrudAnalyzer:
                     elif crud_op == "Delete" and not status.has_delete:
                         status.has_delete = True
                         status.delete_evidence.append(evidence)
+
+    def _check_entity_operations(
+        self,
+        status: EntityCrudStatus,
+        entity: Entity,
+        entity_operations: list[EntityOperation],
+    ) -> None:
+        """EntityOperationからエンティティのCRUD操作を検出する（全証跡収集）"""
+        for op in entity_operations:
+            if not op.entity_class or not op.operation:
+                continue
+            if op.entity_class.lower() != entity.class_name.lower():
+                continue
+
+            chain_str = " → ".join(op.call_chain) if op.call_chain else op.source_class
+            evidence = f"{chain_str}: {op.method_signature}"
+
+            if op.operation == "Create":
+                status.has_create = True
+                status.create_evidence.append(evidence)
+            elif op.operation == "Read":
+                status.has_read = True
+                status.read_evidence.append(evidence)
+            elif op.operation == "Update":
+                status.has_update = True
+                status.update_evidence.append(evidence)
+            elif op.operation == "Delete":
+                status.has_delete = True
+                status.delete_evidence.append(evidence)
 
     def _entity_name_patterns(self, class_name: str) -> list[str]:
         """
