@@ -421,16 +421,14 @@ def run_analyze(
             f"{len(pending_repos)} リポジトリを解析中..."
         )
 
-        # _on_repo_complete runs on the main thread inside _run_parallel_parse's
-        # as_completed loop, so list mutations are lock-free. Any exception here
-        # propagates out; partial checkpoint state is preserved for --resume.
+        # 並列完了順ではなく repo_paths 順でマージするため、
+        # 結果をリポ名→RepoParseResult の辞書に保持する。
+        # checkpoint は完了ごとに incremental 保存する。
+        pending_results: dict[str, "RepoParseResult"] = {}
+
         def _on_repo_complete(result):
             if result.success:
-                all_routes.extend(result.routes)
-                all_controllers.extend(result.controllers)
-                all_models.extend(result.models)
-                all_pages.extend(result.pages)
-                all_entity_operations.extend(result.entity_operations)
+                pending_results[result.repo_name] = result
                 completed_repos.add(result.repo_name)
                 console.print(
                     f"  [green]OK[/green] {result.repo_name}: "
@@ -439,10 +437,26 @@ def run_analyze(
                     f"ページ {len(result.pages)} / "
                     f"エンティティ操作 {len(result.entity_operations)}"
                 )
+                # incremental checkpoint: 完了順で一旦集約
+                _inc_routes = all_routes + [
+                    r for res in pending_results.values() for r in res.routes
+                ]
+                _inc_controllers = all_controllers + [
+                    c for res in pending_results.values() for c in res.controllers
+                ]
+                _inc_models = all_models + [
+                    m for res in pending_results.values() for m in res.models
+                ]
+                _inc_pages = all_pages + [
+                    p for res in pending_results.values() for p in res.pages
+                ]
+                _inc_entity_ops = all_entity_operations + [
+                    op for res in pending_results.values() for op in res.entity_operations
+                ]
                 _save_parse_checkpoint({
-                    "routes": all_routes, "controllers": all_controllers,
-                    "models": all_models, "pages": all_pages,
-                    "entity_operations": all_entity_operations,
+                    "routes": _inc_routes, "controllers": _inc_controllers,
+                    "models": _inc_models, "pages": _inc_pages,
+                    "entity_operations": _inc_entity_ops,
                     "completed_repos": list(completed_repos), "phase": "parse",
                 }, checkpoint_path)
             else:
@@ -457,6 +471,16 @@ def run_analyze(
             parallel=effective_parallel,
             on_complete=_on_repo_complete,
         )
+
+        # repo_paths の順序でマージ（max_routes truncation が決定的になる）
+        for rp in config.repo_paths:
+            result = pending_results.get(rp.name)
+            if result:
+                all_routes.extend(result.routes)
+                all_controllers.extend(result.controllers)
+                all_models.extend(result.models)
+                all_pages.extend(result.pages)
+                all_entity_operations.extend(result.entity_operations)
 
     if failed_repos:
         console.print(
