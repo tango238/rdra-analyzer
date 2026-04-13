@@ -1059,11 +1059,15 @@ def run_rdra(
         console.print("'python main.py analyze' を再実行してください。")
         raise typer.Exit(1)
 
-    from analyzer.source_parser import ParsedRoute, ParsedController, ParsedModel
+    from analyzer.source_parser import ParsedRoute, ParsedController, ParsedModel, EntityOperation
     models = [ParsedModel(**m) if isinstance(m, dict) else m for m in cp["models"]]
     all_routes = [ParsedRoute(**r) if isinstance(r, dict) else r for r in cp["routes"]]
     all_controllers = [ParsedController(**c) if isinstance(c, dict) else c for c in cp["controllers"]]
-    console.print(f"  チェックポイントから読み込み: ルート {len(all_routes)}件 | コントローラー {len(all_controllers)}件 | モデル {len(models)}件")
+    all_entity_ops = [
+        EntityOperation(**eo) if isinstance(eo, dict) else eo
+        for eo in (cp.get("entity_operations") or [])
+    ]
+    console.print(f"  チェックポイントから読み込み: ルート {len(all_routes)}件 | コントローラー {len(all_controllers)}件 | モデル {len(models)}件 | エンティティ操作 {len(all_entity_ops)}件")
 
     # プロジェクトコンテキスト構築
     project_context_text = ""
@@ -1112,6 +1116,7 @@ def run_rdra(
         output_dir=output_dir,
         routes=all_routes,
         controllers=all_controllers,
+        entity_operations=all_entity_ops,
     )
 
     console.print(f"\n[green]RDRAモデル生成完了[/green]")

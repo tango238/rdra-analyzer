@@ -16,6 +16,7 @@ from .activity_diagram import ActivityDiagramGenerator
 from .state_transition import StateTransitionGenerator, EntityStateMachine
 from .business_policy import BusinessPolicyExtractor, BusinessPolicy
 from .viewer_template import generate_viewer_html
+from .crud_matrix import build_uc_entity_crud_index
 
 
 class MermaidRenderer:
@@ -58,6 +59,7 @@ class MermaidRenderer:
         output_dir: Path,
         routes: list = None,
         controllers: list = None,
+        entity_operations: list = None,
     ) -> list[str]:
         """
         全 RDRA ダイアグラムを Markdown ファイルとして出力する。
@@ -151,6 +153,8 @@ class MermaidRenderer:
             entities, relationships, usecases, scenarios,
             groups, state_machines, policies,
             mermaid_sources, rdra_dir,
+            entity_operations=entity_operations,
+            routes=routes,
         )
         saved_files.append(viewer_path)
 
@@ -168,6 +172,8 @@ class MermaidRenderer:
         mermaid_sources: dict[str, str],
         rdra_dir: Path,
         screen_specs: list = None,
+        entity_operations: list = None,
+        routes: list = None,
     ) -> str:
         """インタラクティブビューワー HTML を生成する"""
         generated_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -260,6 +266,23 @@ class MermaidRenderer:
                  ]}
                 for s in (screen_specs or [])
             ],
+            "entity_operations": [
+                {
+                    "entity_class": op.entity_class,
+                    "operation": op.operation,
+                    "method_signature": op.method_signature,
+                    "source_file": op.source_file,
+                    "source_class": op.source_class,
+                    "source_method": op.source_method,
+                    "call_chain": op.call_chain,
+                }
+                for op in (entity_operations or [])
+            ],
+            "uc_entity_crud": build_uc_entity_crud_index(
+                usecases=usecases,
+                entity_operations=(entity_operations or []),
+                routes=(routes or []),
+            ),
         }
 
         data_json = json.dumps(data, ensure_ascii=False)
