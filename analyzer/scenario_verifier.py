@@ -13,7 +13,7 @@ from pathlib import Path
 from llm.provider import LLMProvider
 from .usecase_extractor import Usecase
 from .scenario_builder import OperationScenario, OperationStep
-from .screen_analyzer import ScreenSpec, UIElement
+from .view_model import ViewScreen
 
 
 @dataclass
@@ -48,7 +48,7 @@ class ScenarioVerifier:
     操作シナリオを画面仕様と突き合わせて検証するクラス。
 
     1. シナリオの各ステップに言及されるUI要素を抽出
-    2. 対応する画面のScreenSpecと突き合わせ
+    2. 対応する画面の ViewScreen と突き合わせ
     3. 不整合を検出してレポート
     4. LLMを使って修正版シナリオを生成
     """
@@ -60,20 +60,16 @@ class ScenarioVerifier:
     def verify_all(
         self,
         scenarios: list[OperationScenario],
-        screen_specs: list[ScreenSpec],
+        screen_specs: list[ViewScreen],
         usecases: list[Usecase],
     ) -> list[VerificationResult]:
         """全シナリオを検証する"""
-        # 画面仕様のインデックスを構築
-        screen_by_route = {s.route_path: s for s in screen_specs}
-        # APIから画面を逆引き
-        api_to_screens = self._build_api_index(screen_specs)
-        # UCからルートを取得
+        screen_by_id = {s.screen_id: s for s in screen_specs}
         uc_map = {uc.id: uc for uc in usecases}
 
         results = []
         for sc in scenarios:
-            result = self._verify_scenario(sc, screen_by_route, api_to_screens, uc_map)
+            result = self._verify_scenario(sc, screen_by_id, uc_map)
             results.append(result)
 
         return results
@@ -81,7 +77,7 @@ class ScenarioVerifier:
     def fix_scenarios(
         self,
         scenarios: list[OperationScenario],
-        screen_specs: list[ScreenSpec],
+        screen_specs: list[ViewScreen],
         usecases: list[Usecase],
         results: list[VerificationResult],
         already_fixed: set[str] = None,
@@ -94,8 +90,7 @@ class ScenarioVerifier:
             return scenarios
 
         already_fixed = already_fixed or set()
-        screen_by_route = {s.route_path: s for s in screen_specs}
-        api_to_screens = self._build_api_index(screen_specs)
+        screen_by_id = {s.screen_id: s for s in screen_specs}
         uc_map = {uc.id: uc for uc in usecases}
 
         targets = [(sc, next((r for r in results if r.scenario_id == sc.scenario_id), None))
@@ -106,123 +101,62 @@ class ScenarioVerifier:
         if already_fixed:
             print(f"  前回修正済み: {len(already_fixed)}件をスキップ", file=sys.stderr, flush=True)
 
-        # 「対応画面なし」でもナビゲーション情報を使って修正するため、全画面のナビを集約
-        all_nav_labels = set()
-        for spec in screen_specs:
-            for n in spec.shared_nav_items:
-                all_nav_labels.add(n.label)
-
         fixed = []
         fix_count = 0
         for sc, result in targets:
             if result and result.issues and sc.scenario_id not in already_fixed:
                 fix_count += 1
                 print(f"  [{fix_count}/{to_fix}] {sc.scenario_id} ({len(result.issues)}件の問題)...", file=sys.stderr, flush=True)
-                fixed_sc = self._fix_scenario_with_llm(sc, result, screen_by_route, api_to_screens, uc_map, all_nav_labels)
+                fixed_sc = self._fix_scenario_with_llm(sc, result, screen_by_id, uc_map)
                 fixed.append(fixed_sc)
             else:
                 fixed.append(sc)
 
-            # 10件ごとに中間保存（コールバックがあれば）
             if self._save_callback and fix_count > 0 and fix_count % 10 == 0:
                 self._save_callback(fixed, scenarios[len(fixed):])
 
         return fixed
 
-    def _build_api_index(self, screen_specs: list[ScreenSpec]) -> dict[str, list[ScreenSpec]]:
-        """APIエンドポイント → 画面のインデックス（正規化パスで構築）"""
-        index: dict[str, list[ScreenSpec]] = {}
-        for spec in screen_specs:
-            for api in spec.api_actions.values():
-                if api:
-                    path = self._normalize_api_path(api)
-                    index.setdefault(path, []).append(spec)
-            for btn in spec.action_buttons:
-                if btn.api_call:
-                    path = self._normalize_api_path(btn.api_call)
-                    index.setdefault(path, []).append(spec)
-        return index
-
-    @staticmethod
-    def _normalize_api_path(api_str: str) -> str:
-        """APIパスを正規化: メソッド除去、パラメータ除去、末尾のリソース名を抽出"""
-        path = api_str.split(" ", 1)[-1] if " " in api_str else api_str
-        # /api/v1/owner/hotels/{id} → hotels
-        # パラメータ部分を除去
-        path = re.sub(r"/\{[^}]+\}", "", path)
-        path = re.sub(r"/:[^/]+", "", path)
-        return path
-
-    @staticmethod
-    def _extract_resource_name(path: str) -> str:
-        """パスから末尾のリソース名を抽出"""
-        normalized = re.sub(r"/\{[^}]+\}", "", path)
-        normalized = re.sub(r"/:[^/]+", "", normalized)
-        parts = [p for p in normalized.split("/") if p and p not in ("api", "v1", "v2")]
-        return parts[-1] if parts else ""
-
     def _find_matching_screens(
         self,
         scenario: OperationScenario,
-        screen_by_route: dict[str, ScreenSpec],
-        api_to_screens: dict[str, list[ScreenSpec]],
+        screen_by_id: dict[str, ViewScreen],
         uc_map: dict[str, Usecase],
-    ) -> list[ScreenSpec]:
-        """シナリオに関連する画面を特定する（柔軟マッチング）"""
+    ) -> list[ViewScreen]:
+        """シナリオに関連する画面を特定する"""
         matched = []
-        all_screens = list(screen_by_route.values())
+        all_screens = list(screen_by_id.values())
 
-        # 1. frontend_url から直接マッチ
-        if scenario.frontend_url:
-            url = scenario.frontend_url
-            if url in screen_by_route:
-                matched.append(screen_by_route[url])
-            else:
-                # パラメータ部分を正規化して部分一致
-                for route, spec in screen_by_route.items():
-                    norm_url = re.sub(r"/\{[^}]+\}", "", url).rstrip("/")
-                    norm_route = re.sub(r"/:[^/]+", "", route).rstrip("/")
-                    if norm_url and norm_route and (norm_url in norm_route or norm_route in norm_url):
-                        if spec not in matched:
-                            matched.append(spec)
-
-        # 2. ユースケースの related_routes からAPIリソース名で突き合わせ
         uc = uc_map.get(scenario.usecase_id)
-        if uc:
-            for route in uc.related_routes:
-                norm_path = self._normalize_api_path(route)
-                # 完全一致
-                for screen in api_to_screens.get(norm_path, []):
+        if not uc:
+            return matched
+
+        # ユースケース名で直接マッチ
+        for screen in all_screens:
+            for uc_name in screen.related_usecases:
+                if uc.name in uc_name or uc_name in uc.name:
                     if screen not in matched:
                         matched.append(screen)
 
-                # リソース名ベースの部分一致
-                resource = self._extract_resource_name(route)
-                if resource:
-                    for screen in all_screens:
-                        screen_resources = set()
-                        for api in list(screen.api_actions.values()) + [b.api_call for b in screen.action_buttons]:
-                            if api:
-                                sr = self._extract_resource_name(api)
-                                if sr:
-                                    screen_resources.add(sr)
-                        # リソース名の部分一致（hotel/hotels, booking/bookings等）
-                        for sr in screen_resources:
-                            if resource.rstrip("s") == sr.rstrip("s") or resource in sr or sr in resource:
-                                if screen not in matched:
-                                    matched.append(screen)
+        # related_entities でマッチ
+        if not matched:
+            for screen in all_screens:
+                for model in screen.related_models:
+                    for entity in uc.related_entities:
+                        if model == entity or model in entity or entity in model:
+                            if screen not in matched:
+                                matched.append(screen)
 
         return matched
 
     def _verify_scenario(
         self,
         scenario: OperationScenario,
-        screen_by_route: dict[str, ScreenSpec],
-        api_to_screens: dict[str, list[ScreenSpec]],
+        screen_by_id: dict[str, ViewScreen],
         uc_map: dict[str, Usecase],
     ) -> VerificationResult:
         """単一シナリオを検証する"""
-        matched_screens = self._find_matching_screens(scenario, screen_by_route, api_to_screens, uc_map)
+        matched_screens = self._find_matching_screens(scenario, screen_by_id, uc_map)
         issues = []
         verified = 0
 
@@ -242,34 +176,26 @@ class ScenarioVerifier:
                 issues=issues,
             )
 
-        # 全画面のUI要素を集約
-        all_buttons = []
-        all_fields = []
-        all_menus = []
-        all_modals = []
-        all_tabs = []
+        # 全画面の UI ラベルを集約
+        all_labels = set()
+        button_labels = set()
+        field_labels = set()
         for screen in matched_screens:
-            all_buttons.extend(screen.action_buttons)
-            all_fields.extend(screen.form_fields)
-            all_menus.extend(screen.shared_nav_items)
-            all_modals.extend(screen.modals)
-            all_tabs.extend(screen.tabs)
-
-        button_labels = {b.label for b in all_buttons}
-        field_labels = {f.label for f in all_fields}
-        menu_labels = {m.label for m in all_menus}
-        modal_names = set(all_modals)
-        tab_names = set(all_tabs)
-        all_labels = button_labels | field_labels | menu_labels | modal_names | tab_names
+            for action in screen.actions:
+                button_labels.add(action.label)
+                all_labels.add(action.label)
+            for section in screen.sections:
+                for f in section.input_fields:
+                    field_labels.add(f.label)
+                    all_labels.add(f.label)
 
         for step in scenario.steps:
             if step.actor == "システム":
                 verified += 1
                 continue
-
             step_issues = self._verify_step(
                 step, scenario.scenario_id,
-                all_labels, button_labels, field_labels, menu_labels,
+                all_labels, button_labels, field_labels, set(),
                 matched_screens,
             )
             if step_issues:
@@ -293,7 +219,7 @@ class ScenarioVerifier:
         button_labels: set[str],
         field_labels: set[str],
         menu_labels: set[str],
-        screens: list[ScreenSpec],
+        screens: list[ViewScreen],
     ) -> list[VerificationIssue]:
         """ステップ内のUI要素参照を検証する"""
         issues = []
@@ -303,7 +229,6 @@ class ScenarioVerifier:
         quoted = re.findall(r"「(.+?)」", action)
         for element_name in quoted:
             if not self._find_element_match(element_name, all_labels):
-                # 類似候補を探す
                 suggestion = self._find_similar(element_name, all_labels)
                 issues.append(VerificationIssue(
                     scenario_id=scenario_id,
@@ -314,24 +239,12 @@ class ScenarioVerifier:
                     suggestion=f"類似: {suggestion}" if suggestion else "",
                 ))
 
-        # クリック/タップ系アクションでボタン名を検証
-        click_patterns = re.findall(r"(?:クリック|タップ|押す|選択)(?:する)?", action)
-        if click_patterns and not quoted:
-            # 具体的なUI要素名が引用なしで言及されているか
-            for label in button_labels | menu_labels:
-                if label in action:
-                    break
-            else:
-                # ボタン名が見つからない場合は警告レベル
-                pass
-
         return issues
 
     def _find_element_match(self, name: str, all_labels: set[str]) -> bool:
         """要素名が画面仕様に存在するか（部分一致含む）"""
         if name in all_labels:
             return True
-        # 部分一致
         for label in all_labels:
             if name in label or label in name:
                 return True
@@ -341,7 +254,6 @@ class ScenarioVerifier:
         """類似する要素名を探す"""
         candidates = []
         for label in all_labels:
-            # 共通文字数で類似度判定
             common = sum(1 for c in name if c in label)
             if common >= min(len(name), threshold):
                 candidates.append(label)
@@ -351,40 +263,27 @@ class ScenarioVerifier:
         self,
         scenario: OperationScenario,
         result: VerificationResult,
-        screen_by_route: dict[str, ScreenSpec],
-        api_to_screens: dict[str, list[ScreenSpec]],
+        screen_by_id: dict[str, ViewScreen],
         uc_map: dict[str, Usecase],
-        all_nav_labels: set[str] = None,
     ) -> OperationScenario:
         """LLMでシナリオを修正する"""
-        matched_screens = self._find_matching_screens(scenario, screen_by_route, api_to_screens, uc_map)
+        matched_screens = self._find_matching_screens(scenario, screen_by_id, uc_map)
 
-        # 画面のUI要素をテキスト化
         screen_context = ""
-        if not matched_screens and all_nav_labels:
-            screen_context += f"\n（対応する画面仕様なし。共有ナビゲーション項目: {', '.join(sorted(all_nav_labels)[:20])}）\n"
-            screen_context += "注意: 対応する画面が見つからないため、存在しないメニューやボタンを推測で使わないでください。\n"
-            screen_context += "APIエンドポイントへの直接アクセスとして記述してください。\n"
         for screen in matched_screens:
-            screen_context += f"\n画面: {screen.route_path} ({screen.page_title})\n"
-            if screen.action_buttons:
-                screen_context += f"  ボタン: {', '.join(b.label for b in screen.action_buttons)}\n"
-            if screen.form_fields:
-                screen_context += f"  フォーム: {', '.join(f.label for f in screen.form_fields)}\n"
-            if screen.tabs:
-                screen_context += f"  タブ: {', '.join(screen.tabs)}\n"
-            if screen.modals:
-                screen_context += f"  モーダル: {', '.join(screen.modals)}\n"
-            if screen.shared_nav_items:
-                screen_context += f"  ナビ: {', '.join(n.label for n in screen.shared_nav_items)}\n"
+            screen_context += f"\n画面: {screen.screen_id} ({screen.title})\n"
+            for section in screen.sections:
+                screen_context += f"  セクション: {section.section_name}\n"
+                for f in section.input_fields:
+                    screen_context += f"    - {f.label} ({f.type})\n"
+            if screen.actions:
+                screen_context += f"  アクション: {', '.join(a.label for a in screen.actions)}\n"
 
-        # 問題点をテキスト化
         issues_text = "\n".join([
             f"  Step {i.step_no}: {i.description} (アクション: {i.action_text}){' → ' + i.suggestion if i.suggestion else ''}"
             for i in result.issues
         ])
 
-        # 現在のステップ
         steps_text = "\n".join([
             f"  Step {s.step_no}: [{s.actor}] {s.action} → {s.expected_result}"
             for s in scenario.steps
@@ -477,7 +376,6 @@ class ScenarioVerifier:
     @staticmethod
     def save_report(results: list[VerificationResult], output_path: Path) -> None:
         """検証レポートをJSON + Markdownで保存する"""
-        # JSON
         json_data = {
             "metadata": {
                 "total_scenarios": len(results),
@@ -510,7 +408,6 @@ class ScenarioVerifier:
         json_path.parent.mkdir(parents=True, exist_ok=True)
         json_path.write_text(json.dumps(json_data, ensure_ascii=False, indent=2), encoding="utf-8")
 
-        # Markdown
         md_lines = ["# シナリオ検証レポート\n"]
         meta = json_data["metadata"]
         md_lines.append(f"- シナリオ数: {meta['total_scenarios']}")
