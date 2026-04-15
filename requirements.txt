@@ -13,5 +13,6 @@ playwright>=1.49.0          # PlaywrightブラウザE2Eテスト
 # ===== ユーティリティ =====
 pydantic>=2.0.0             # データバリデーション・モデル
 python-dotenv>=1.0.0        # .envファイル読み込み
+PyYAML>=6.0                 # YAML入出力（ui.yml）
 aiofiles>=24.0.0            # 非同期ファイルI/O
 tenacity>=9.0.0             # リトライロジック
