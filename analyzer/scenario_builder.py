@@ -109,6 +109,11 @@ class ScenarioBuilder:
                 for f in section.input_fields:
                     field_labels.add(f.label)
                     all_labels.add(f.label)
+                    for col in f.columns:
+                        col_label = col.get("label", "")
+                        if col_label:
+                            field_labels.add(col_label)
+                            all_labels.add(col_label)
 
         scenarios = self._build_for_usecase(usecase)
 
@@ -221,11 +226,19 @@ class ScenarioBuilder:
     def _find_screens_for_usecase(self, usecase: Usecase) -> list:
         """ユースケースに関連する画面仕様を特定する"""
         matched = []
-        # related_entities でマッチ
+        # related_entities でマッチ（完全一致 → 部分一致）
         for entity in usecase.related_entities:
+            # 完全一致
             for spec in self._screen_model_index.get(entity, []):
                 if spec not in matched:
                     matched.append(spec)
+            # 部分一致（日本語名 vs クラス名の不一致を吸収）
+            if not matched:
+                for model, specs in self._screen_model_index.items():
+                    if entity in model or model in entity:
+                        for spec in specs:
+                            if spec not in matched:
+                                matched.append(spec)
         # related_usecases でマッチ
         if not matched:
             for spec in self._screen_specs:

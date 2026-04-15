@@ -188,6 +188,12 @@ class ScenarioVerifier:
                 for f in section.input_fields:
                     field_labels.add(f.label)
                     all_labels.add(f.label)
+                    # data_table の列ラベルも検証対象に含める
+                    for col in f.columns:
+                        col_label = col.get("label", "")
+                        if col_label:
+                            field_labels.add(col_label)
+                            all_labels.add(col_label)
 
         for step in scenario.steps:
             if step.actor == "システム":
