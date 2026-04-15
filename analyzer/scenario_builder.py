@@ -54,7 +54,7 @@ class ScenarioBuilder:
     def __init__(self, llm_provider: LLMProvider, screen_specs: list = None):
         self._llm = llm_provider
         self._screen_specs = screen_specs or []
-        self._screen_api_index = self._build_screen_api_index()
+        self._screen_model_index = self._build_screen_model_index()
 
     def build(self, usecases: list[Usecase]) -> list[OperationScenario]:
         """
@@ -103,19 +103,13 @@ class ScenarioBuilder:
         field_labels = set()
         menu_labels = set()
         for screen in matched_screens:
-            for b in screen.action_buttons:
-                button_labels.add(b.label)
-                all_labels.add(b.label)
-            for f in screen.form_fields:
-                field_labels.add(f.label)
-                all_labels.add(f.label)
-            for m in screen.shared_nav_items:
-                menu_labels.add(m.label)
-                all_labels.add(m.label)
-            for modal in screen.modals:
-                all_labels.add(modal)
-            for tab in screen.tabs:
-                all_labels.add(tab)
+            for a in screen.actions:
+                button_labels.add(a.label)
+                all_labels.add(a.label)
+            for section in screen.sections:
+                for f in section.input_fields:
+                    field_labels.add(f.label)
+                    all_labels.add(f.label)
 
         scenarios = self._build_for_usecase(usecase)
 
@@ -217,37 +211,29 @@ class ScenarioBuilder:
 
         return self._parse_scenarios(response, usecase)
 
-    def _build_screen_api_index(self) -> dict:
-        """画面仕様のAPIインデックスを構築"""
-        import re
+    def _build_screen_model_index(self) -> dict:
+        """画面仕様のモデル名インデックスを構築"""
         index = {}
         for spec in self._screen_specs:
-            for api in list(spec.api_actions.values()) + [b.api_call for b in spec.action_buttons]:
-                if api:
-                    # リソース名を抽出して逆引き
-                    path = api.split(" ", 1)[-1] if " " in api else api
-                    normalized = re.sub(r"/\{[^}]+\}", "", path)
-                    normalized = re.sub(r"/:[^/]+", "", normalized)
-                    parts = [p for p in normalized.split("/") if p and p not in ("api", "v1", "v2")]
-                    resource = parts[-1] if parts else ""
-                    if resource:
-                        index.setdefault(resource.rstrip("s"), []).append(spec)
+            for model in getattr(spec, "related_models", []):
+                index.setdefault(model, []).append(spec)
         return index
 
     def _find_screens_for_usecase(self, usecase: Usecase) -> list:
         """ユースケースに関連する画面仕様を特定する"""
-        import re
         matched = []
-        for route in usecase.related_routes:
-            path = route.split(" ", 1)[-1] if " " in route else route
-            normalized = re.sub(r"/\{[^}]+\}", "", path)
-            normalized = re.sub(r"/:[^/]+", "", normalized)
-            parts = [p for p in normalized.split("/") if p and p not in ("api", "v1", "v2")]
-            resource = parts[-1] if parts else ""
-            if resource:
-                for spec in self._screen_api_index.get(resource.rstrip("s"), []):
-                    if spec not in matched:
-                        matched.append(spec)
+        # related_entities でマッチ
+        for entity in usecase.related_entities:
+            for spec in self._screen_model_index.get(entity, []):
+                if spec not in matched:
+                    matched.append(spec)
+        # related_usecases でマッチ
+        if not matched:
+            for spec in self._screen_specs:
+                for uc_name in getattr(spec, "related_usecases", []):
+                    if usecase.name in uc_name or uc_name in usecase.name:
+                        if spec not in matched:
+                            matched.append(spec)
         return matched
 
     def _build_screen_context(self, screens: list) -> str:
@@ -257,25 +243,17 @@ class ScenarioBuilder:
 
         lines = ["\n## 実際の画面仕様（この情報に基づいてステップを生成してください）"]
         for screen in screens[:5]:  # 最大5画面
-            lines.append(f"\n### 画面: {screen.route_path} ({screen.page_title or screen.component_name})")
-            if screen.action_buttons:
-                btn_info = []
-                for b in screen.action_buttons:
-                    info = b.label
-                    if b.target:
-                        info += f" → {b.target}"
-                    if b.api_call:
-                        info += f" (API: {b.api_call})"
-                    btn_info.append(info)
-                lines.append(f"  ボタン: {', '.join(btn_info)}")
-            if screen.form_fields:
-                lines.append(f"  フォーム項目: {', '.join(f.label for f in screen.form_fields)}")
-            if screen.tabs:
-                lines.append(f"  タブ: {', '.join(screen.tabs)}")
-            if screen.modals:
-                lines.append(f"  モーダル: {', '.join(screen.modals)}")
-            if screen.shared_nav_items:
-                lines.append(f"  ナビゲーション: {', '.join(n.label for n in screen.shared_nav_items[:10])}")
+            lines.append(f"\n### 画面: {screen.screen_id} ({screen.title})")
+            for section in screen.sections:
+                lines.append(f"  セクション: {section.section_name}")
+                for f in section.input_fields:
+                    label = f.label
+                    if f.type == "data_table":
+                        col_labels = [c.get("label", "") for c in f.columns[:5]]
+                        label += f" [列: {', '.join(col_labels)}]"
+                    lines.append(f"    - {label} ({f.type})")
+            if screen.actions:
+                lines.append(f"  アクション: {', '.join(a.label for a in screen.actions)}")
 
         return "\n".join(lines)
 
