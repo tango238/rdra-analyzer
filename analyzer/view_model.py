@@ -38,7 +38,7 @@ class ViewAction:
     type: str                       # submit, custom, reset
     label: str                      # 日本語ラベル
     style: str = "primary"          # primary, secondary, danger, link
-    confirm: dict | None = None     # {title, message}
+    confirm: dict = None             # {title, message}
 
 
 @dataclass

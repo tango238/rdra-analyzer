@@ -554,7 +554,7 @@ def run_scenarios(
                             continue
                         issues = verifier._verify_step(
                             step, sc.scenario_id,
-                            all_labels, set(), set(), set(), matched_screens,
+                            all_labels, set(), set(), matched_screens,
                         )
                         if issues:
                             has_issues = True

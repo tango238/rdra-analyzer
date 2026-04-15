@@ -195,7 +195,7 @@ class ScenarioVerifier:
                 continue
             step_issues = self._verify_step(
                 step, scenario.scenario_id,
-                all_labels, button_labels, field_labels, set(),
+                all_labels, button_labels, field_labels,
                 matched_screens,
             )
             if step_issues:
@@ -218,7 +218,6 @@ class ScenarioVerifier:
         all_labels: set[str],
         button_labels: set[str],
         field_labels: set[str],
-        menu_labels: set[str],
         screens: list[ViewScreen],
     ) -> list[VerificationIssue]:
         """ステップ内のUI要素参照を検証する"""

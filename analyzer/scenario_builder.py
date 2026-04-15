@@ -101,7 +101,6 @@ class ScenarioBuilder:
         all_labels = set()
         button_labels = set()
         field_labels = set()
-        menu_labels = set()
         for screen in matched_screens:
             for a in screen.actions:
                 button_labels.add(a.label)
@@ -123,7 +122,7 @@ class ScenarioBuilder:
                         continue
                     step_issues = verifier._verify_step(
                         step, sc.scenario_id,
-                        all_labels, button_labels, field_labels, menu_labels,
+                        all_labels, button_labels, field_labels,
                         matched_screens,
                     )
                     issues.extend(step_issues)
