@@ -75,3 +75,48 @@ impl Related<super::post::Entity> for Entity {
     fn to() -> RelationDef { ... }
 }
 ```
+
+## CRUD操作パターン
+
+> **注意**: 対象プロジェクトの CLAUDE.md または AGENTS.md にCRUD操作パターンや
+> データアクセス層の規約が記載されている場合は、そちらを優先すること。
+> 以下はフレームワークの一般的なパターンであり、フォールバックとして参照する。
+
+### Diesel 操作
+| CRUD | メソッド/パターン |
+|------|-----------------|
+| Create | `diesel::insert_into(table).values(&new_record).execute(&mut conn)`, `diesel::insert_into(table).values(&new_record).get_result(&mut conn)` |
+| Read | `table.find(id).first(&mut conn)`, `table.filter(...).load(&mut conn)`, `table.select(...).load(&mut conn)` |
+| Update | `diesel::update(table.find(id)).set(...).execute(&mut conn)`, `diesel::update(table.filter(...)).set(...)` |
+| Delete | `diesel::delete(table.find(id)).execute(&mut conn)`, `diesel::delete(table.filter(...)).execute(&mut conn)` |
+
+### SeaORM 操作
+| CRUD | メソッド/パターン |
+|------|-----------------|
+| Create | `Entity::insert(active_model).exec(&db).await`, `Entity::insert_many([...]).exec(&db).await` |
+| Read | `Entity::find_by_id(id).one(&db).await`, `Entity::find().filter(...).all(&db).await` |
+| Update | `active_model.update(&db).await`, `Entity::update_many().set(...).filter(...).exec(&db).await` |
+| Delete | `active_model.delete(&db).await`, `Entity::delete_by_id(id).exec(&db).await` |
+
+## コール階層
+
+> **注意**: 対象プロジェクトの CLAUDE.md または AGENTS.md にアーキテクチャ構成や
+> レイヤー間の呼び出し規約が記載されている場合は、そちらを優先すること。
+> 以下はフレームワークの典型的なパターンであり、フォールバックとして参照する。
+
+### パターン1: Handler → Service → Repository
+```rust
+// handler
+async fn create_order(data: web::Json<OrderInput>, svc: web::Data<OrderService>) -> impl Responder {
+    let order = svc.create_order(data.into_inner()).await?;
+    HttpResponse::Created().json(order)
+}
+// service
+impl OrderService {
+    async fn create_order(&self, input: OrderInput) -> Result<Order> {
+        let order = self.order_repo.create(&input).await?;   // Order: Create
+        self.stock_repo.decrement(input.product_id).await?;  // Stock: Update
+        Ok(order)
+    }
+}
+```

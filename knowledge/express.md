@@ -71,3 +71,66 @@ class User extends Model {
     }
 }
 ```
+
+## CRUD操作パターン
+
+> **注意**: 対象プロジェクトの CLAUDE.md または AGENTS.md にCRUD操作パターンや
+> データアクセス層の規約が記載されている場合は、そちらを優先すること。
+> 以下はフレームワークの一般的なパターンであり、フォールバックとして参照する。
+
+### Prisma 操作
+| CRUD | メソッド/パターン |
+|------|-----------------|
+| Create | `prisma.model.create({ data: ... })`, `prisma.model.createMany({ data: [...] })` |
+| Read | `prisma.model.findUnique({ where: ... })`, `prisma.model.findMany(...)`, `prisma.model.findFirst(...)`, `prisma.model.count(...)` |
+| Update | `prisma.model.update({ where: ..., data: ... })`, `prisma.model.updateMany(...)`, `prisma.model.upsert(...)` |
+| Delete | `prisma.model.delete({ where: ... })`, `prisma.model.deleteMany(...)` |
+
+### TypeORM 操作
+| CRUD | メソッド/パターン |
+|------|-----------------|
+| Create | `repository.save(new Entity())`, `repository.create(...)`, `repository.insert(...)` |
+| Read | `repository.findOne(...)`, `repository.find(...)`, `repository.findOneBy(...)`, `repository.createQueryBuilder(...)` |
+| Update | `repository.save(existing)`, `repository.update(id, ...)` |
+| Delete | `repository.delete(id)`, `repository.remove(entity)`, `repository.softDelete(id)` |
+
+### Sequelize 操作
+| CRUD | メソッド/パターン |
+|------|-----------------|
+| Create | `Model.create(...)`, `Model.bulkCreate([...])` |
+| Read | `Model.findByPk(id)`, `Model.findAll(...)`, `Model.findOne(...)`, `Model.count(...)` |
+| Update | `instance.update(...)`, `instance.save()`, `Model.update(..., { where: ... })` |
+| Delete | `instance.destroy()`, `Model.destroy({ where: ... })` |
+
+## コール階層
+
+> **注意**: 対象プロジェクトの CLAUDE.md または AGENTS.md にアーキテクチャ構成や
+> レイヤー間の呼び出し規約が記載されている場合は、そちらを優先すること。
+> 以下はフレームワークの典型的なパターンであり、フォールバックとして参照する。
+
+### パターン1: Controller → Model（直接操作）
+```typescript
+export const createOrder = async (req: Request, res: Response) => {
+    const order = await prisma.order.create({ data: req.body });   // Order: Create
+    await prisma.stock.update({ where: { id: pid }, data: { qty: { decrement: 1 } } }); // Stock: Update
+    res.json(order);
+};
+```
+
+### パターン2: Controller → Service → Model
+```typescript
+// controller
+export const createOrder = async (req: Request, res: Response) => {
+    const order = await orderService.createOrder(req.body);
+    res.json(order);
+};
+// service
+export class OrderService {
+    async createOrder(data: OrderInput) {
+        const order = await prisma.order.create({ data });         // Order: Create
+        await this.stockService.decrement(data.productId);         // Stock: Update
+        await prisma.payment.create({ data: { orderId: order.id } }); // Payment: Create
+        return order;
+    }
+}
+```

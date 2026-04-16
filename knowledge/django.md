@@ -62,3 +62,65 @@ class UserViewSet(viewsets.ModelViewSet):
 def user_list(request):
     ...
 ```
+
+## CRUD操作パターン
+
+> **注意**: 対象プロジェクトの CLAUDE.md または AGENTS.md にCRUD操作パターンや
+> データアクセス層の規約が記載されている場合は、そちらを優先すること。
+> 以下はフレームワークの一般的なパターンであり、フォールバックとして参照する。
+
+### Django ORM 操作
+| CRUD | メソッド/パターン |
+|------|-----------------|
+| Create | `Model.objects.create(...)`, `Model(...).save()`, `Model.objects.get_or_create(...)`, `Model.objects.bulk_create([...])` |
+| Read | `Model.objects.get(pk=id)`, `Model.objects.filter(...)`, `Model.objects.all()`, `Model.objects.first()`, `Model.objects.values(...)` |
+| Update | `obj.save()` (既存), `Model.objects.filter(...).update(...)`, `obj.field = value; obj.save()`, `Model.objects.bulk_update([...])` |
+| Delete | `obj.delete()`, `Model.objects.filter(...).delete()` |
+
+### リレーション経由の操作
+| CRUD | メソッド/パターン |
+|------|-----------------|
+| Create | `parent.children.create(...)`, `parent.children.add(child)` |
+| Read | `parent.children.all()`, `parent.children.filter(...)` |
+| Update | `parent.children.update(...)` |
+| Delete | `parent.children.remove(child)`, `parent.children.clear()` |
+
+## コール階層
+
+> **注意**: 対象プロジェクトの CLAUDE.md または AGENTS.md にアーキテクチャ構成や
+> レイヤー間の呼び出し規約が記載されている場合は、そちらを優先すること。
+> 以下はフレームワークの典型的なパターンであり、フォールバックとして参照する。
+
+### パターン1: View → Model（直接操作）
+```python
+class OrderViewSet(viewsets.ModelViewSet):
+    def perform_create(self, serializer):
+        order = serializer.save()                        # Order: Create
+        Stock.objects.filter(product=pid).update(qty=F('qty') - 1)  # Stock: Update
+```
+
+### パターン2: View → Service → Model
+```python
+# views.py
+class OrderCreateView(APIView):
+    def post(self, request):
+        return OrderService().create_order(request.data)
+# services.py
+class OrderService:
+    def create_order(self, data):
+        order = Order.objects.create(**data)              # Order: Create
+        StockService().decrement(data['items'])           # Stock: Update
+        Payment.objects.create(order=order, ...)          # Payment: Create
+        return order
+```
+
+### パターン3: Signal 経由
+```python
+@receiver(post_save, sender=Order)
+def on_order_created(sender, instance, created, **kwargs):
+    if created:
+        Notification.objects.create(...)                  # Notification: Create
+@receiver(post_delete, sender=Order)
+def on_order_deleted(sender, instance, **kwargs):
+    instance.items.all().delete()                         # OrderItem: Delete
+```

@@ -544,7 +544,7 @@ function getBusinessList() {{
   const entities = (DATA.entities||[]);
   const ucGroups = {{}};
   ucs.forEach(u => {{
-    const crud = _routeToCrud(u.related_routes);
+    const crud = _ucCrud(u);
     const hasCUD = crud.has("C") || crud.has("U") || crud.has("D");
     if(!hasCUD) return;
     (u.related_entities||[]).forEach(en => {{
@@ -570,7 +570,7 @@ function getBusinessList() {{
         seen.add(key);
         const crudSet = new Set();
         ucList.forEach(u => {{
-          const crud = _routeToCrud(u.related_routes);
+          const crud = _ucCrud(u);
           ["C","U","D"].forEach(c => {{ if(crud.has(c)) crudSet.add(c); }});
         }});
         list.push({{
@@ -604,6 +604,22 @@ function _routeToCrud(routes) {{
     if(m === "DELETE") crud.add("D");
   }});
   return crud;
+}}
+function _ucEntityCrud(uc, entityClassName) {{
+  // DATA.uc_entity_crud から参照 (Python 側で事前計算済み)
+  const precomputed = ((DATA.uc_entity_crud||{{}})[uc.id]||{{}})[entityClassName];
+  if (precomputed && precomputed.length > 0) return new Set(precomputed);
+  // フォールバック: regenerate 等で uc_entity_crud が空の場合は HTTP メソッドから推定
+  return _routeToCrud(uc.related_routes||[]);
+}}
+function _ucCrud(uc) {{
+  // UC の全 related_entities にわたる CRUD 集合
+  const all = new Set();
+  const ucMap = (DATA.uc_entity_crud||{{}})[uc.id] || {{}};
+  Object.values(ucMap).forEach(arr => arr.forEach(c => all.add(c)));
+  if (all.size > 0) return all;
+  // フォールバック (uc_entity_crud が無い古い viewer 用)
+  return _routeToCrud(uc.related_routes||[]);
 }}
 function buildBusinessView() {{
   const wrap = document.getElementById("business-view");
@@ -662,10 +678,11 @@ function buildActorEntityMatrix() {{
   // アクター×エンティティ → CRUD集合
   const map = {{}};
   ucs.forEach(u => {{
-    const crud = _routeToCrud(u.related_routes);
     (u.related_entities||[]).forEach(en => {{
       const entObj = entities.find(e => e.class_name===en || e.name===en);
       const eName = entObj ? entObj.name : en;
+      const cls = entObj ? entObj.class_name : en;
+      const crud = _ucEntityCrud(u, cls);
       const key = (u.actor||"") + "|" + eName;
       if(!map[key]) map[key] = new Set();
       crud.forEach(c => map[key].add(c));
@@ -716,11 +733,12 @@ function buildCrossRef() {{
   // Build lookup: entity+uc -> CRUD set
   const map = {{}};
   ucs.forEach(u => {{
-    const crud = _routeToCrud(u.related_routes);
     (u.related_entities||[]).forEach(en => {{
       // match by class_name or japanese name
       const eName = (DATA.entities||[]).find(e => e.class_name===en || e.name===en);
       const key = eName ? eName.name : en;
+      const cls = eName ? eName.class_name : en;
+      const crud = _ucEntityCrud(u, cls);
       const mk = key + "|" + u.id;
       if(!map[mk]) map[mk] = new Set();
       crud.forEach(c => map[mk].add(c));
@@ -892,7 +910,7 @@ function showEntityDetail(cls) {{
     html += `<div class="detail-section"><h4>関連ユースケース</h4><ul class="detail-list">${{[...relatedUcIds].map(uid => {{
       const uc = (DATA.usecases||[]).find(u => u.id===uid);
       if(!uc) return "";
-      const crud = _routeToCrud(uc.related_routes||[]);
+      const crud = _ucEntityCrud(uc, ent.class_name);
       const crudBadges = ["C","R","U","D"].filter(c=>crud.has(c))
         .map(c=>`<span style="color:${{crudColors[c]}};font-weight:bold;margin-left:2px">${{c}}</span>`).join("");
       return `<li><span class="clickable" data-uc="${{uid}}">${{uid}}</span> ${{uc.name}} ${{crudBadges}}</li>`;
@@ -923,19 +941,12 @@ function showUcDetail(ucId) {{
   // 関連エンティティ: information_groups またはユースケースの related_entities から
   const entList = (groups.length && groups[0].entities) ? groups[0].entities : (uc.related_entities||[]);
   if(entList.length) {{
-    const ucCrud = _routeToCrud(uc.related_routes||[]);
     const crudColors = {{C:"#2a9d8f",R:"#4361ee",U:"#f4a261",D:"#e63946"}};
     html += `<div class="detail-section"><h4>関連エンティティ</h4><ul class="detail-list">${{entList.map(en=>{{
       const entObj = (DATA.entities||[]).find(e=>e.name===en||e.class_name===en);
       const cls = entObj ? entObj.class_name : en;
       const name = entObj ? entObj.name : en;
-      // エンティティ固有のCRUDをルートから推定
-      const entRoutes = (uc.related_routes||[]).filter(r => {{
-        const path = r.split(" ").pop().toLowerCase();
-        const enLower = en.toLowerCase();
-        return path.includes(enLower) || path.includes(enLower + "s") || path.includes(enLower.replace(/y$/,"ies"));
-      }});
-      const entCrud = entRoutes.length > 0 ? _routeToCrud(entRoutes) : ucCrud;
+      const entCrud = _ucEntityCrud(uc, cls);
       const crudBadges = ["C","R","U","D"].filter(c=>entCrud.has(c))
         .map(c=>`<span style="color:${{crudColors[c]}};font-weight:bold;margin-left:2px">${{c}}</span>`).join("");
       return `<li><span class="clickable" data-entity="${{cls}}">${{name}}</span> ${{crudBadges}}</li>`;

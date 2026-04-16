@@ -50,3 +50,37 @@ const { data: users } = await useFetch('/api/users')
 const { data: user } = await useAsyncData('user', () => $fetch(`/api/users/${id}`))
 </script>
 ```
+
+## CRUD操作パターン
+
+> Nuxt.js はフロントエンドフレームワークだが、Nitro サーバーエンジンにより
+> server/api/ 内でDB操作を直接行うBFFパターンが一般的。
+> この場合のCRUD操作パターンは以下を参照。
+
+### Nitro Server Route でのDB操作
+- Prisma, Drizzle, Knex 等のORMをNuxtサーバー内で使用するケースがある
+- Express.js のknowledge（Prisma/TypeORM/Sequelize）のCRUD操作パターンを参照すること
+
+## コール階層
+
+> Nuxt.js の server/api/ ルートでは、以下の経路でCRUD操作が行われる。
+> CLAUDE.md / AGENTS.md に記載がある場合はそちらを優先する。
+
+### パターン1: Server Route → Model（直接操作）
+```typescript
+// server/api/orders.post.ts
+export default defineEventHandler(async (event) => {
+    const body = await readBody(event);
+    const order = await prisma.order.create({ data: body });  // Order: Create
+    return order;
+});
+```
+
+### パターン2: Server Route → Service → Model
+```typescript
+// server/api/orders.post.ts
+export default defineEventHandler(async (event) => {
+    const body = await readBody(event);
+    return await orderService.createOrder(body);
+});
+```
