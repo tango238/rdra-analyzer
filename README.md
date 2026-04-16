@@ -217,11 +217,11 @@ python main.py analyze --repo /path/to/backend --repo /path/to/frontend
 --checkpoint-interval 30  # 中間保存の間隔（デフォルト30件）
 ```
 
-出力: `./output/usecases/analysis_result.json`, `./output/usecases/screen_specs.json`, `./output/usecases/_checkpoint.json`
+出力: `./output/usecases/analysis_result.json`, `./output/usecases/ui.yml`, `./output/usecases/_checkpoint.json`
 
 #### scenarios: シナリオ生成
 
-ユースケースから操作シナリオを生成する。`screen_specs.json` が存在すれば自動的に画面仕様を参照し、実際のUI要素に基づいたステップを生成する。
+ユースケースから操作シナリオを生成する。`ui.yml` が存在すれば自動的に画面仕様を参照し、実際のUI要素に基づいたステップを生成する。
 生成後に画面仕様との突き合わせ検証を行い、不整合があれば自動的に再生成する。
 
 ```bash
