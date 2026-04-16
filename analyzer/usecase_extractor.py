@@ -139,19 +139,17 @@ class UsecaseExtractor:
         if screen_specs:
             screen_lines: list[str] = []
             for spec in screen_specs[:50]:
-                line = f"  {spec.route_path}: {spec.page_title or '(無題)'}"
-                if spec.action_buttons:
-                    btn_names = [b.label for b in spec.action_buttons[:5]]
-                    if btn_names:
-                        line += f" [ボタン: {', '.join(btn_names)}]"
-                if spec.form_fields:
-                    field_names = [f.label for f in spec.form_fields[:5]]
-                    if field_names:
-                        line += f" [フォーム: {', '.join(field_names)}]"
-                if spec.modals:
-                    line += f" [モーダル: {', '.join(spec.modals[:3])}]"
-                if spec.tabs:
-                    line += f" [タブ: {', '.join(spec.tabs[:5])}]"
+                line = f"  {spec.screen_id}: {spec.title or '(無題)'}"
+                # セクション内のフィールドラベルを集約
+                field_labels = []
+                for section in spec.sections:
+                    for f in section.input_fields[:5]:
+                        field_labels.append(f.label)
+                if field_labels:
+                    line += f" [フィールド: {', '.join(field_labels[:8])}]"
+                if spec.actions:
+                    action_names = [a.label for a in spec.actions[:5]]
+                    line += f" [アクション: {', '.join(action_names)}]"
                 screen_lines.append(line)
             parts.append("## 画面仕様（UI要素）")
             parts.append("\n".join(screen_lines))

@@ -242,28 +242,27 @@ class MermaidRenderer:
                 for g in (groups or [])
             ],
             "screen_specs": [
-                {"route_path": s.route_path, "file_path": s.file_path,
-                 "component_name": s.component_name, "page_title": s.page_title,
-                 "layout_type": s.layout_type,
-                 "action_buttons": [
-                     {"element_type": b.element_type, "label": b.label,
-                      "target": b.target, "api_call": b.api_call}
-                     for b in s.action_buttons
+                {"screen_id": s.screen_id,
+                 "title": s.title,
+                 "description": s.description,
+                 "actor": s.actor,
+                 "purpose": s.purpose,
+                 "sections": [
+                     {"section_name": sec.section_name,
+                      "input_fields": [
+                          {"id": f.id, "type": f.type, "label": f.label,
+                           "required": f.required, "columns": f.columns}
+                          for f in sec.input_fields
+                      ]}
+                     for sec in s.sections
                  ],
-                 "form_fields": [
-                     {"element_type": f.element_type, "label": f.label,
-                      "target": f.target, "api_call": f.api_call}
-                     for f in s.form_fields
+                 "actions": [
+                     {"id": a.id, "type": a.type, "label": a.label,
+                      "style": a.style}
+                     for a in s.actions
                  ],
-                 "modals": s.modals, "tabs": s.tabs,
-                 "api_actions": s.api_actions,
-                 "parent_page": s.parent_page,
-                 "child_pages": s.child_pages,
-                 "shared_layout": s.shared_layout,
-                 "shared_nav_items": [
-                     {"element_type": n.element_type, "label": n.label, "target": n.target}
-                     for n in s.shared_nav_items
-                 ]}
+                 "related_models": s.related_models,
+                 "related_usecases": s.related_usecases}
                 for s in (screen_specs or [])
             ],
             "entity_operations": [

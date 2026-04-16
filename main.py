@@ -507,12 +507,12 @@ def run_analyze(
 
     # 画面分析（UC抽出の前に実行し、結果をUC抽出に活用）
     screen_specs = []
-    screen_path = output_dir / "usecases" / "screen_specs.json"
+    screen_path = output_dir / "usecases" / "ui.yml"
 
     # 既存の画面仕様があれば読み込んでスキップ
     if resume and screen_path.exists():
         from analyzer.screen_analyzer import ScreenAnalyzer
-        screen_specs = ScreenAnalyzer.load_from_json(screen_path)
+        screen_specs = ScreenAnalyzer.load_from_yaml(screen_path)
         if screen_specs:
             console.print(f"\n  [cyan]既存の画面仕様 {len(screen_specs)}件を読み込み（スキップ）[/cyan]")
 
@@ -566,18 +566,12 @@ def run_analyze(
                 console.print(f"    -> {len(batch_specs)}画面抽出")
 
                 # 中間保存
-                screen_path = output_dir / "usecases" / "screen_specs.json"
-                ScreenAnalyzer.save_to_json(screen_specs, screen_path)
-
-            # ナビゲーショングラフ構築
-            screen_analyzer._build_navigation_graph(screen_specs)
-            for spec in screen_specs:
-                if spec.shared_layout and spec.shared_layout in shared_layouts:
-                    spec.shared_nav_items = shared_layouts[spec.shared_layout]
+                screen_path = output_dir / "usecases" / "ui.yml"
+                ScreenAnalyzer.save_to_yaml(screen_specs, screen_path)
 
             # 最終保存
-            screen_path = output_dir / "usecases" / "screen_specs.json"
-            ScreenAnalyzer.save_to_json(screen_specs, screen_path)
+            screen_path = output_dir / "usecases" / "ui.yml"
+            ScreenAnalyzer.save_to_yaml(screen_specs, screen_path)
 
             console.print(f"  -> 画面分析完了: {len(screen_specs)}件")
             console.print(f"  出力: {screen_path}")
@@ -713,10 +707,10 @@ def run_scenarios(
 
     # 画面仕様を読み込み（存在すれば）
     screen_specs = []
-    screen_path = (input_file.parent if input_file else Path(config.output_dir) / "usecases") / "screen_specs.json"
+    screen_path = (input_file.parent if input_file else Path(config.output_dir) / "usecases") / "ui.yml"
     if screen_path.exists():
         from analyzer.screen_analyzer import ScreenAnalyzer
-        screen_specs = ScreenAnalyzer.load_from_json(screen_path)
+        screen_specs = ScreenAnalyzer.load_from_yaml(screen_path)
         console.print(f"  画面仕様: {len(screen_specs)}件を読み込み")
 
     from analyzer.scenario_builder import ScenarioBuilder
@@ -737,16 +731,11 @@ def run_scenarios(
                 validated_count += 1
                 all_labels = set()
                 for screen in matched_screens:
-                    for b in screen.action_buttons:
-                        all_labels.add(b.label)
-                    for f in screen.form_fields:
-                        all_labels.add(f.label)
-                    for m in screen.shared_nav_items:
-                        all_labels.add(m.label)
-                    for modal in screen.modals:
-                        all_labels.add(modal)
-                    for tab in screen.tabs:
-                        all_labels.add(tab)
+                    for a in screen.actions:
+                        all_labels.add(a.label)
+                    for section in screen.sections:
+                        for f in section.input_fields:
+                            all_labels.add(f.label)
                 has_issues = False
                 for sc in sc_list:
                     for step in sc.steps:
@@ -754,7 +743,7 @@ def run_scenarios(
                             continue
                         issues = verifier._verify_step(
                             step, sc.scenario_id,
-                            all_labels, set(), set(), set(), matched_screens,
+                            all_labels, set(), set(), matched_screens,
                         )
                         if issues:
                             has_issues = True
@@ -813,13 +802,13 @@ def run_verify(
     console.print(f"  ユースケース: {len(usecases)}件 | シナリオ: {len(scenarios)}件")
 
     # 画面仕様の読み込み
-    screen_path = output_dir / "usecases" / "screen_specs.json"
+    screen_path = output_dir / "usecases" / "ui.yml"
     if not screen_path.exists():
         console.print("[red]画面仕様が見つかりません。先に 'screens' を実行してください。[/red]")
         raise typer.Exit(1)
 
     from analyzer.screen_analyzer import ScreenAnalyzer
-    screen_specs = ScreenAnalyzer.load_from_json(screen_path)
+    screen_specs = ScreenAnalyzer.load_from_yaml(screen_path)
     console.print(f"  画面仕様: {len(screen_specs)}件")
 
     # 検証実行
@@ -937,7 +926,7 @@ def run_screens(
     画面分析: フロントエンドのUI要素を詳細に抽出する。
 
     ボタン・フォーム・モーダル・タブ・ナビゲーション等を
-    実際のコンポーネントから抽出し screen_specs.json に保存する。
+    実際のコンポーネントから抽出し ui.yml に保存する。
     """
     _print_header("画面分析")
 
@@ -1004,18 +993,12 @@ def run_screens(
         console.print(f"    -> {len(batch_specs)}画面抽出")
 
         # 中間保存
-        screen_path = output_dir / "usecases" / "screen_specs.json"
-        ScreenAnalyzer.save_to_json(specs, screen_path)
-
-    # ナビゲーショングラフ構築
-    analyzer._build_navigation_graph(specs)
-    for spec in specs:
-        if spec.shared_layout and spec.shared_layout in shared_layouts:
-            spec.shared_nav_items = shared_layouts[spec.shared_layout]
+        screen_path = output_dir / "usecases" / "ui.yml"
+        ScreenAnalyzer.save_to_yaml(specs, screen_path)
 
     # 最終保存
-    screen_path = output_dir / "usecases" / "screen_specs.json"
-    ScreenAnalyzer.save_to_json(specs, screen_path)
+    screen_path = output_dir / "usecases" / "ui.yml"
+    ScreenAnalyzer.save_to_yaml(specs, screen_path)
 
     console.print(f"\n[green]画面分析完了[/green]")
     console.print(f"  画面数: {len(specs)}件")
@@ -1449,10 +1432,10 @@ def _build_viewer(output_dir: Path) -> str:
 
     # ---- 画面仕様の読み込み（存在すれば）----
     screen_specs = []
-    screen_path = output_dir / "usecases" / "screen_specs.json"
+    screen_path = output_dir / "usecases" / "ui.yml"
     if screen_path.exists():
         from analyzer.screen_analyzer import ScreenAnalyzer
-        screen_specs = ScreenAnalyzer.load_from_json(screen_path)
+        screen_specs = ScreenAnalyzer.load_from_yaml(screen_path)
 
     # ---- ビューワー生成 ----
     config = _get_config()

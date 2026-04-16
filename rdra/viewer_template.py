@@ -291,10 +291,12 @@ function ucConditionsTable() {{
 function screenTable() {{
   const screens = getScreenList();
   if(!screens.length) return `<p style="color:var(--text-muted)">画面データがありません。<code>python main.py analyze</code> を実行してください。</p>`;
-  const rows = screens.map(s =>
-    `<tr><td>${{s.id}}</td><td class="clickable" data-screen="${{s.route_path}}" style="cursor:pointer;color:var(--accent)">${{s.route_path}}</td><td>${{s.component_name}}</td><td>${{s.page_title||""}}</td><td>${{s.layout_type||""}}</td><td>${{(s.action_buttons||[]).length}}</td><td>${{(s.form_fields||[]).length}}</td></tr>`
-  ).join("");
-  return sortableTable("screen-tbl",["ID","ルート","コンポーネント","タイトル","レイアウト","ボタン数","フィールド数"],rows);
+  const rows = screens.map(s => {{
+    const sectionCount = (s.sections||[]).length;
+    const fieldCount = (s.sections||[]).reduce((sum, sec) => sum + (sec.input_fields||[]).length, 0);
+    return `<tr><td class="clickable" data-screen="${{s.screen_id}}" style="cursor:pointer;color:var(--accent)">${{s.screen_id}}</td><td>${{s.title||""}}</td><td>${{s.actor||""}}</td><td>${{sectionCount}}</td><td>${{fieldCount}}</td><td>${{(s.actions||[]).length}}</td></tr>`;
+  }}).join("");
+  return sortableTable("screen-tbl",["画面ID","タイトル","アクター","セクション数","フィールド数","アクション数"],rows);
 }}
 function actorTable() {{
   const actorMap = {{}};
@@ -528,7 +530,7 @@ let SCREEN_LIST = null;
 function getScreenList() {{
   if(SCREEN_LIST) return SCREEN_LIST;
   SCREEN_LIST = (DATA.screen_specs||[]).map((s,i) => ({{
-    id: `SC-${{String(i+1).padStart(3,"0")}}`,
+    id: s.screen_id || `SC-${{String(i+1).padStart(3,"0")}}`,
     ...s,
   }}));
   return SCREEN_LIST;
@@ -1086,85 +1088,59 @@ function showUcConditionDetail(ucId) {{
   }}
 }}
 
-function showScreenDetail(routePath) {{
-  const scr = (DATA.screen_specs||[]).find(s => s.route_path === routePath);
+function showScreenDetail(screenId) {{
+  const scr = (DATA.screen_specs||[]).find(s => s.screen_id === screenId);
   if(!scr) return;
 
-  let html = `<div class="detail-title">${{scr.page_title || scr.component_name}}</div>`;
-  html += `<div class="detail-section"><p><code>${{scr.route_path}}</code></p>`;
-  html += `<p>コンポーネント: ${{scr.component_name}}</p>`;
-  if(scr.file_path) html += `<p>ファイル: <code>${{scr.file_path}}</code></p>`;
-  if(scr.layout_type) html += `<p>レイアウト: ${{scr.layout_type}}</p>`;
-  if(scr.shared_layout) html += `<p>共有レイアウト: ${{scr.shared_layout}}</p>`;
+  let html = `<div class="detail-title">${{scr.title}}</div>`;
+  html += `<div class="detail-section">`;
+  if(scr.description) html += `<p>${{scr.description}}</p>`;
+  if(scr.actor) html += `<p>アクター: ${{scr.actor}}</p>`;
+  if(scr.purpose) html += `<p>目的: ${{scr.purpose}}</p>`;
   html += `</div>`;
 
-  // ボタン
-  if(scr.action_buttons && scr.action_buttons.length) {{
-    html += `<div class="detail-section"><h4>ボタン / アクション</h4>`;
-    html += `<table class="data-table"><thead><tr><th>ラベル</th><th>遷移先</th><th>API</th></tr></thead><tbody>`;
-    scr.action_buttons.forEach(b => {{
-      const target = b.target ? `<span class="clickable" data-screen="${{b.target}}" style="color:var(--accent)">${{b.target}}</span>` : "—";
-      html += `<tr><td>${{b.label}}</td><td>${{target}}</td><td><code>${{b.api_call||"—"}}</code></td></tr>`;
+  // セクション & フィールド
+  (scr.sections||[]).forEach(sec => {{
+    html += `<div class="detail-section"><h4>${{sec.section_name}}</h4>`;
+    if(sec.input_fields && sec.input_fields.length) {{
+      html += `<table class="data-table"><thead><tr><th>ラベル</th><th>種別</th><th>必須</th></tr></thead><tbody>`;
+      sec.input_fields.forEach(f => {{
+        const req = f.required ? '<span style="color:var(--high)">*</span>' : '';
+        let typeLabel = f.type;
+        if(f.type === 'data_table' && f.columns) {{
+          typeLabel += ` (${{f.columns.length}}列)`;
+        }}
+        html += `<tr><td>${{f.label}}</td><td>${{typeLabel}}</td><td>${{req}}</td></tr>`;
+      }});
+      html += `</tbody></table>`;
+    }}
+    html += `</div>`;
+  }});
+
+  // アクション
+  if(scr.actions && scr.actions.length) {{
+    html += `<div class="detail-section"><h4>アクション</h4>`;
+    html += `<table class="data-table"><thead><tr><th>ラベル</th><th>種別</th><th>スタイル</th></tr></thead><tbody>`;
+    scr.actions.forEach(a => {{
+      html += `<tr><td>${{a.label}}</td><td>${{a.type}}</td><td>${{a.style||""}}</td></tr>`;
     }});
     html += `</tbody></table></div>`;
   }}
 
-  // フォームフィールド
-  if(scr.form_fields && scr.form_fields.length) {{
-    html += `<div class="detail-section"><h4>フォーム項目</h4>`;
-    html += `<table class="data-table"><thead><tr><th>ラベル</th><th>種別</th></tr></thead><tbody>`;
-    scr.form_fields.forEach(f => {{
-      html += `<tr><td>${{f.label}}</td><td>${{f.element_type}}</td></tr>`;
-    }});
-    html += `</tbody></table></div>`;
-  }}
-
-  // タブ
-  if(scr.tabs && scr.tabs.length) {{
-    html += `<div class="detail-section"><h4>タブ</h4><ul class="detail-list">${{scr.tabs.map(t=>`<li>${{t}}</li>`).join("")}}</ul></div>`;
-  }}
-
-  // モーダル
-  if(scr.modals && scr.modals.length) {{
-    html += `<div class="detail-section"><h4>モーダル / ダイアログ</h4><ul class="detail-list">${{scr.modals.map(m=>`<li>${{m}}</li>`).join("")}}</ul></div>`;
-  }}
-
-  // API アクション
-  if(scr.api_actions && Object.keys(scr.api_actions).length) {{
-    html += `<div class="detail-section"><h4>APIアクション</h4>`;
-    html += `<table class="data-table"><thead><tr><th>操作</th><th>エンドポイント</th></tr></thead><tbody>`;
-    Object.entries(scr.api_actions).forEach(([label, api]) => {{
-      html += `<tr><td>${{label}}</td><td><code>${{api||"—"}}</code></td></tr>`;
-    }});
-    html += `</tbody></table></div>`;
-  }}
-
-  // ナビゲーション
-  if(scr.parent_page) {{
-    html += `<div class="detail-section"><h4>親ページ</h4><p><span class="clickable" data-screen="${{scr.parent_page}}" style="color:var(--accent)">${{scr.parent_page}}</span></p></div>`;
-  }}
-  if(scr.child_pages && scr.child_pages.length) {{
-    html += `<div class="detail-section"><h4>子ページ</h4><ul class="detail-list">${{scr.child_pages.map(c=>`<li><span class="clickable" data-screen="${{c}}" style="color:var(--accent)">${{c}}</span></li>`).join("")}}</ul></div>`;
-  }}
-
-  // 共有ナビゲーション
-  if(scr.shared_nav_items && scr.shared_nav_items.length) {{
-    html += `<div class="detail-section"><h4>共有ナビゲーション</h4><ul class="detail-list">${{scr.shared_nav_items.map(n=>
-      `<li><span class="clickable" data-screen="${{n.target}}" style="color:var(--accent)">${{n.label}}</span> → ${{n.target}}</li>`
-    ).join("")}}</ul></div>`;
+  // 関連モデル
+  if(scr.related_models && scr.related_models.length) {{
+    html += `<div class="detail-section"><h4>関連モデル</h4><ul class="detail-list">${{scr.related_models.map(m => {{
+      const entity = (DATA.entities||[]).find(e => e.name === m);
+      return entity ? `<li class="clickable" onclick="showEntityDetail('${{m}}')" style="color:var(--accent);cursor:pointer">${{m}}</li>` : `<li>${{m}}</li>`;
+    }}).join("")}}</ul></div>`;
   }}
 
   // 関連ユースケース
-  const relatedUcs = (DATA.usecases||[]).filter(u =>
-    (u.related_routes||[]).some(r => {{
-      const apiPath = r.split(" ")[1] || r;
-      return Object.values(scr.api_actions||{{}}).some(a => a.includes(apiPath));
-    }})
-  );
-  if(relatedUcs.length) {{
-    html += `<div class="detail-section"><h4>関連ユースケース</h4><ul class="detail-list">${{relatedUcs.map(u=>
-      `<li><span class="clickable" data-uc="${{u.id}}">${{u.id}}</span> ${{u.name}}</li>`
-    ).join("")}}</ul></div>`;
+  if(scr.related_usecases && scr.related_usecases.length) {{
+    html += `<div class="detail-section"><h4>関連ユースケース</h4><ul class="detail-list">${{scr.related_usecases.map(u => {{
+      const uc = (DATA.usecases||[]).find(x => x.name === u);
+      return uc ? `<li class="clickable" data-uc-condition="${{uc.id}}" style="color:var(--accent);cursor:pointer">${{u}}</li>` : `<li>${{u}}</li>`;
+    }}).join("")}}</ul></div>`;
   }}
 
   openDetail(html);
