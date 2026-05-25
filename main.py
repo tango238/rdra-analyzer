@@ -1610,6 +1610,127 @@ def run_generate(
     console.print(f"  ビューワー: {output_dir}/{rdra_subdir}/viewer.html")
 
 
+@app.command("testgen")
+def run_testgen(
+    repo: Optional[list[str]] = typer.Option(
+        None, "--repo", "-r", help="解析対象リポジトリのパス（複数指定可）"
+    ),
+    generation_file: Optional[Path] = typer.Option(
+        None, "--input", "-i",
+        help="generateコマンドの出力JSON（省略時は output/usecases/generation_result.json）"
+    ),
+    output_dir: Optional[Path] = typer.Option(
+        None, "--output", "-o", help="出力ディレクトリ"
+    ),
+):
+    """
+    業務フロー・利用シーンからテストコードを生成する。
+
+    generateコマンドで抽出した業務フロー/利用シーンと、
+    解析対象リポジトリのソースコード構造を組み合わせて、
+    プロジェクトの言語・フレームワークに適したテストコードを生成する。
+
+    使用例:
+        python main.py testgen --repo /path/to/project
+        python main.py testgen --repo /path/to/project --input output/usecases/generation_result.json
+    """
+    _print_header("テストコード生成（業務フロー・利用シーン → テスト）")
+
+    config = _get_config()
+    _apply_repo_option(config, repo)
+    output_dir = output_dir or config.output_dir
+    output_dir = Path(output_dir)
+
+    # generation_result.json の読み込み
+    gen_path = generation_file or (output_dir / "usecases" / "generation_result.json")
+    if not gen_path.exists():
+        console.print(f"[red]生成結果が見つかりません: {gen_path}[/red]")
+        console.print("先に 'python main.py generate <要件定義ファイル>' を実行してください。")
+        raise typer.Exit(1)
+
+    gen_data = json.loads(gen_path.read_text(encoding="utf-8"))
+    business_flows = gen_data.get("business_flows", [])
+    usage_scenes = gen_data.get("usage_scenes", [])
+
+    if not business_flows and not usage_scenes:
+        console.print("[yellow]業務フロー・利用シーンが見つかりません。[/yellow]")
+        raise typer.Exit(1)
+
+    console.print(f"  業務フロー: {len(business_flows)}件")
+    console.print(f"  利用シーン: {len(usage_scenes)}件")
+
+    # リポジトリの解析（チェックポイントがあれば再利用）
+    checkpoint_path = output_dir / "usecases" / "_checkpoint.json"
+    routes, controllers, models = [], [], []
+
+    if checkpoint_path.exists():
+        from analyzer.source_parser import ParsedRoute, ParsedController, ParsedModel
+        cp = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+        routes = [ParsedRoute(**r) if isinstance(r, dict) else r for r in cp.get("routes", [])]
+        controllers = [ParsedController(**c) if isinstance(c, dict) else c for c in cp.get("controllers", [])]
+        models = [ParsedModel(**m) if isinstance(m, dict) else m for m in cp.get("models", [])]
+        console.print(f"  チェックポイントから読み込み: ルート {len(routes)}件 | コントローラー {len(controllers)}件 | モデル {len(models)}件")
+    elif config.repo_paths:
+        console.print("[dim]ソースコードを解析中...[/dim]")
+        from analyzer.source_parser import SourceParser, ParsedRoute, ParsedController, ParsedModel
+        llm_for_parse = _get_llm()
+        parser = SourceParser(llm_provider=llm_for_parse)
+        for repo_path in config.repo_paths:
+            if repo_path.exists():
+                result = parser.parse_repo(repo_path)
+                routes.extend(result["routes"])
+                controllers.extend(result["controllers"])
+                models.extend(result["models"])
+        console.print(f"  解析結果: ルート {len(routes)}件 | コントローラー {len(controllers)}件 | モデル {len(models)}件")
+    else:
+        console.print("[yellow]リポジトリが指定されていません。ソースコード情報なしでテストを生成します。[/yellow]")
+
+    # プロジェクトコンテキスト
+    project_context_text = ""
+    tech_stack = ""
+    if config.repo_paths:
+        from analyzer.project_context import build_context, format_context_for_prompt
+        all_contexts = [build_context(rp) for rp in config.repo_paths if rp.exists()]
+        project_context_text = format_context_for_prompt(all_contexts)
+        tech_stack = ", ".join(
+            stack for ctx in all_contexts for stack in ctx.detected_stacks
+        )
+        if tech_stack:
+            console.print(f"  技術スタック: {tech_stack}")
+
+    # テストコード生成
+    llm = _get_llm()
+
+    from e2e.test_generator import TestCodeGenerator, save_generated_tests
+
+    generator = TestCodeGenerator(llm)
+
+    console.print("\n[dim]テストコードを生成中...[/dim]")
+    tests = generator.generate_from_flows(
+        business_flows=business_flows,
+        usage_scenes=usage_scenes,
+        routes=routes,
+        controllers=controllers,
+        models=models,
+        project_context=project_context_text,
+        tech_stack=tech_stack,
+    )
+
+    if not tests:
+        console.print("[yellow]テストコードを生成できませんでした。[/yellow]")
+        raise typer.Exit(1)
+
+    # ファイル保存
+    saved_files = save_generated_tests(tests, output_dir)
+
+    console.print(f"\n[green]テストコード生成完了[/green]")
+    console.print(f"  生成ファイル数: {len(saved_files)}")
+    for t in tests:
+        kind = "業務フロー" if t.source_type == "business_flow" else "利用シーン"
+        console.print(f"    [{kind}] {t.source_name} -> {t.file_path} ({t.language}/{t.test_framework})")
+    console.print(f"  出力先: {output_dir}/generated_tests/")
+
+
 def _save_generation_result(result, output_dir: Path) -> None:
     """RDRA2.0 の4層全モデルをJSONとして保存する"""
     data = {
