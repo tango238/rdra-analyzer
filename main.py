@@ -1526,16 +1526,35 @@ def run_generate(
 
     generator = RequirementsGenerator(llm)
 
-    # Phase 1: エンティティ・リレーション抽出
-    console.print("\n[dim]Phase 1/4: エンティティ・リレーション抽出中...[/dim]")
+    console.print("\n[dim]RDRA2.0 の進め方に沿って抽出中...[/dim]")
     result = generator.generate(requirements_text)
 
-    console.print(f"  -> エンティティ: {len(result.entities)}件")
-    console.print(f"  -> リレーション: {len(result.relationships)}件")
-    console.print(f"  -> ユースケース: {len(result.usecases)}件")
-    console.print(f"  -> 操作シナリオ: {len(result.scenarios)}件")
-    console.print(f"  -> 状態遷移: {len(result.state_machines)}件")
-    console.print(f"  -> ビジネスポリシー: {len(result.policies)}件")
+    # Layer 1: システム価値
+    console.print(f"\n  [bold]Layer 1: システム価値[/bold]")
+    console.print(f"    アクター: {len(result.actors)}件")
+    console.print(f"    外部システム: {len(result.external_systems)}件")
+    console.print(f"    要求: {len(result.requirements)}件")
+
+    # Layer 2: システム外部環境
+    console.print(f"  [bold]Layer 2: システム外部環境[/bold]")
+    console.print(f"    業務: {len(result.businesses)}件")
+    console.print(f"    BUC: {len(result.business_usecases)}件")
+    console.print(f"    業務フロー: {len(result.business_flows)}件")
+    console.print(f"    利用シーン: {len(result.usage_scenes)}件")
+    console.print(f"    バリエーション: {len(result.variations)}件")
+    console.print(f"    条件: {len(result.conditions)}件")
+
+    # Layer 3: システム境界
+    console.print(f"  [bold]Layer 3: システム境界[/bold]")
+    console.print(f"    ユースケース: {len(result.usecases)}件")
+    console.print(f"    操作シナリオ: {len(result.scenarios)}件")
+
+    # Layer 4: システム
+    console.print(f"  [bold]Layer 4: システム[/bold]")
+    console.print(f"    エンティティ: {len(result.entities)}件")
+    console.print(f"    リレーション: {len(result.relationships)}件")
+    console.print(f"    状態遷移: {len(result.state_machines)}件")
+    console.print(f"    ビジネスルール: {len(result.policies)}件")
 
     if not result.entities and not result.usecases:
         console.print("[red]要件定義からモデル要素を抽出できませんでした。[/red]")
@@ -1592,21 +1611,61 @@ def run_generate(
 
 
 def _save_generation_result(result, output_dir: Path) -> None:
-    """生成結果をJSONとして保存する"""
-    from rdra.requirements_generator import RDRAGenerationResult
-
+    """RDRA2.0 の4層全モデルをJSONとして保存する"""
     data = {
-        "entities": [
-            {"name": e.name, "class_name": e.class_name,
-             "table_name": e.table_name, "attributes": e.attributes,
-             "description": e.description}
-            for e in result.entities
+        # Layer 1: システム価値
+        "actors": [
+            {"name": a.name, "description": a.description}
+            for a in result.actors
         ],
-        "relationships": [
-            {"from_entity": r.from_entity, "to_entity": r.to_entity,
-             "relation_type": r.relation_type, "label": r.label}
-            for r in result.relationships
+        "external_systems": [
+            {"name": s.name, "description": s.description}
+            for s in result.external_systems
         ],
+        "requirements": [
+            {"id": r.id, "description": r.description,
+             "source": r.source, "reason": r.reason}
+            for r in result.requirements
+        ],
+        # Layer 2: システム外部環境
+        "businesses": [
+            {"name": b.name, "actors": b.actors}
+            for b in result.businesses
+        ],
+        "business_usecases": [
+            {"id": b.id, "name": b.name, "business": b.business,
+             "actors": b.actors}
+            for b in result.business_usecases
+        ],
+        "business_flows": [
+            {"buc_id": f.buc_id, "buc_name": f.buc_name,
+             "steps": [
+                 {"step_no": s.step_no, "actor": s.actor,
+                  "action": s.action, "next_step": s.next_step}
+                 for s in f.steps
+             ]}
+            for f in result.business_flows
+        ],
+        "usage_scenes": [
+            {"buc_id": s.buc_id, "buc_name": s.buc_name,
+             "scene_name": s.scene_name, "description": s.description,
+             "steps": [
+                 {"step_no": st.step_no, "actor": st.actor,
+                  "action": st.action}
+                 for st in s.steps
+             ]}
+            for s in result.usage_scenes
+        ],
+        "variations": [
+            {"name": v.name, "values": v.values}
+            for v in result.variations
+        ],
+        "conditions": [
+            {"name": c.name, "variations": c.variations,
+             "description": c.description}
+            for c in result.conditions
+        ],
+        # Layer 3: システム境界
         "usecases": [
             {"id": uc.id, "name": uc.name, "actor": uc.actor,
              "description": uc.description,
@@ -1630,6 +1689,18 @@ def _save_generation_result(result, output_dir: Path) -> None:
              ],
              "variations": sc.variations}
             for sc in result.scenarios
+        ],
+        # Layer 4: システム
+        "entities": [
+            {"name": e.name, "class_name": e.class_name,
+             "table_name": e.table_name, "attributes": e.attributes,
+             "description": e.description}
+            for e in result.entities
+        ],
+        "relationships": [
+            {"from_entity": r.from_entity, "to_entity": r.to_entity,
+             "relation_type": r.relation_type, "label": r.label}
+            for r in result.relationships
         ],
         "state_machines": [
             {"entity_name": sm.entity_name, "entity_class": sm.entity_class,

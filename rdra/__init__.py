@@ -17,7 +17,12 @@ from .activity_diagram import ActivityDiagramGenerator
 from .state_transition import StateTransitionGenerator, EntityStateMachine, StateTransition
 from .business_policy import BusinessPolicyExtractor, BusinessPolicy
 from .mermaid_renderer import MermaidRenderer
-from .requirements_generator import RequirementsGenerator, RDRAGenerationResult
+from .requirements_generator import (
+    RequirementsGenerator, RDRAGenerationResult,
+    Actor, ExternalSystem, Requirement,
+    Business, BusinessUseCase, BusinessFlow, UsageScene,
+    Variation, Condition,
+)
 
 __all__ = [
     "InformationModelGenerator",
