@@ -327,15 +327,16 @@ def save_generated_tests(
         if not test.code:
             continue
 
-        # ファイル名を生成（推奨パスからファイル名部分を取得）
         if test.file_path:
-            file_name = Path(test.file_path).name
+            # ディレクトリ構造を保持して保存
+            rel_path = Path(test.file_path)
+            file_path = test_dir / rel_path
         else:
             safe_name = test.source_name.replace(" ", "_").replace("/", "_")
             ext = _language_extension(test.language)
-            file_name = f"test_{safe_name}{ext}"
+            file_path = test_dir / f"test_{safe_name}{ext}"
 
-        file_path = test_dir / file_name
+        file_path.parent.mkdir(parents=True, exist_ok=True)
         file_path.write_text(test.code, encoding="utf-8")
         saved.append(str(file_path))
 
