@@ -1566,23 +1566,29 @@ def run_generate(
         project_name=project_name,
     )
 
+    rdra_subdir = "rdra-generate"
+
     saved_files = renderer.render_all(
         entities=result.entities,
         relationships=result.relationships,
         usecases=result.usecases,
         scenarios=result.scenarios,
         output_dir=output_dir,
+        state_machines=result.state_machines,
+        policies=result.policies,
+        rdra_subdir=rdra_subdir,
     )
 
     # 状態遷移・ビジネスポリシーを含むビューワーを生成
     _render_generate_viewer(
         renderer, info_gen, result, output_dir, project_name,
+        rdra_subdir=rdra_subdir,
     )
 
     console.print(f"\n[green]RDRAモデル生成完了[/green]")
     console.print(f"  生成ファイル数: {len(saved_files) + 1}")
-    console.print(f"  インデックス: {output_dir}/rdra/index.md")
-    console.print(f"  ビューワー: {output_dir}/rdra/viewer.html")
+    console.print(f"  インデックス: {output_dir}/{rdra_subdir}/index.md")
+    console.print(f"  ビューワー: {output_dir}/{rdra_subdir}/viewer.html")
 
 
 def _save_generation_result(result, output_dir: Path) -> None:
@@ -1656,6 +1662,7 @@ def _save_generation_result(result, output_dir: Path) -> None:
 
 def _render_generate_viewer(
     renderer, info_gen, result, output_dir: Path, project_name: str,
+    rdra_subdir: str = "rdra-generate",
 ) -> str:
     """generate コマンド用のビューワーを生成する"""
     from rdra.usecase_diagram import UsecaseDiagramGenerator
@@ -1700,7 +1707,8 @@ def _render_generate_viewer(
     for sm in result.state_machines:
         mermaid_sources[f"state_{sm.entity_class}"] = st_gen.to_mermaid(sm)
 
-    rdra_dir = output_dir / "rdra"
+    rdra_dir = output_dir / rdra_subdir
+    rdra_dir.mkdir(parents=True, exist_ok=True)
     viewer_path = renderer._render_viewer(
         entities=result.entities,
         relationships=result.relationships,
