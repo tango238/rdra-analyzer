@@ -21,6 +21,9 @@ Typer を使用したCLIインターフェース。
     # パート4: E2Eテスト実行のみ
     python main.py e2e
 
+    # 要件定義からRDRAモデル生成
+    python main.py generate requirements.md --name "ECサイト"
+
     # 設定確認
     python main.py config
 """
@@ -1471,6 +1474,243 @@ def _build_viewer(output_dir: Path) -> str:
         policies=policies, mermaid_sources=mermaid_sources,
         rdra_dir=rdra_dir,
         screen_specs=screen_specs,
+    )
+    return viewer_path
+
+
+@app.command("generate")
+def run_generate(
+    input_file: Path = typer.Argument(
+        ..., help="要件定義ファイルのパス（テキスト/Markdown）"
+    ),
+    output_dir: Optional[Path] = typer.Option(
+        None, "--output", "-o", help="出力ディレクトリ（省略時は ./output）"
+    ),
+    project_name: str = typer.Option(
+        "", "--name", "-n", help="プロジェクト名（省略時はファイル名から推定）"
+    ),
+):
+    """
+    要件定義ファイルからRDRAモデルを生成する。
+
+    ソースコードなしで、要件定義テキスト（自然言語/Markdown）から
+    RDRAの全モデル（情報モデル・ユースケース・操作シナリオ・状態遷移・ビジネスポリシー）
+    を抽出し、Mermaid図とインタラクティブビューワーを生成する。
+
+    使用例:
+        python main.py generate requirements.md
+        python main.py generate 要件定義.txt --name "ECサイト" --output ./output
+    """
+    _print_header("要件定義からRDRAモデル生成")
+
+    if not input_file.exists():
+        console.print(f"[red]ファイルが見つかりません: {input_file}[/red]")
+        raise typer.Exit(1)
+
+    config = _get_config()
+    output_dir = output_dir or config.output_dir
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    if not project_name:
+        project_name = input_file.stem
+
+    requirements_text = input_file.read_text(encoding="utf-8")
+    console.print(f"  要件定義ファイル: {input_file}")
+    console.print(f"  文字数: {len(requirements_text):,}")
+    console.print(f"  プロジェクト名: {project_name}")
+
+    llm = _get_llm()
+
+    from rdra.requirements_generator import RequirementsGenerator
+
+    generator = RequirementsGenerator(llm)
+
+    # Phase 1: エンティティ・リレーション抽出
+    console.print("\n[dim]Phase 1/4: エンティティ・リレーション抽出中...[/dim]")
+    result = generator.generate(requirements_text)
+
+    console.print(f"  -> エンティティ: {len(result.entities)}件")
+    console.print(f"  -> リレーション: {len(result.relationships)}件")
+    console.print(f"  -> ユースケース: {len(result.usecases)}件")
+    console.print(f"  -> 操作シナリオ: {len(result.scenarios)}件")
+    console.print(f"  -> 状態遷移: {len(result.state_machines)}件")
+    console.print(f"  -> ビジネスポリシー: {len(result.policies)}件")
+
+    if not result.entities and not result.usecases:
+        console.print("[red]要件定義からモデル要素を抽出できませんでした。[/red]")
+        console.print("要件定義の内容を確認してください。")
+        raise typer.Exit(1)
+
+    # 生成結果を JSON として保存
+    _save_generation_result(result, output_dir)
+
+    # Mermaid ダイアグラム生成
+    console.print("\n[dim]Mermaidダイアグラムを生成中...[/dim]")
+
+    from rdra.information_model import InformationModelGenerator
+    from rdra.usecase_diagram import UsecaseDiagramGenerator
+    from rdra.activity_diagram import ActivityDiagramGenerator
+    from rdra.state_transition import StateTransitionGenerator
+    from rdra.business_policy import BusinessPolicyExtractor
+    from rdra.mermaid_renderer import MermaidRenderer
+
+    info_gen = InformationModelGenerator(llm)
+
+    renderer = MermaidRenderer(
+        info_model_gen=info_gen,
+        usecase_diagram_gen=UsecaseDiagramGenerator(llm),
+        activity_diagram_gen=ActivityDiagramGenerator(),
+        state_transition_gen=None,
+        business_policy_ext=None,
+        project_name=project_name,
+    )
+
+    saved_files = renderer.render_all(
+        entities=result.entities,
+        relationships=result.relationships,
+        usecases=result.usecases,
+        scenarios=result.scenarios,
+        output_dir=output_dir,
+    )
+
+    # 状態遷移・ビジネスポリシーを含むビューワーを生成
+    _render_generate_viewer(
+        renderer, info_gen, result, output_dir, project_name,
+    )
+
+    console.print(f"\n[green]RDRAモデル生成完了[/green]")
+    console.print(f"  生成ファイル数: {len(saved_files) + 1}")
+    console.print(f"  インデックス: {output_dir}/rdra/index.md")
+    console.print(f"  ビューワー: {output_dir}/rdra/viewer.html")
+
+
+def _save_generation_result(result, output_dir: Path) -> None:
+    """生成結果をJSONとして保存する"""
+    from rdra.requirements_generator import RDRAGenerationResult
+
+    data = {
+        "entities": [
+            {"name": e.name, "class_name": e.class_name,
+             "table_name": e.table_name, "attributes": e.attributes,
+             "description": e.description}
+            for e in result.entities
+        ],
+        "relationships": [
+            {"from_entity": r.from_entity, "to_entity": r.to_entity,
+             "relation_type": r.relation_type, "label": r.label}
+            for r in result.relationships
+        ],
+        "usecases": [
+            {"id": uc.id, "name": uc.name, "actor": uc.actor,
+             "description": uc.description,
+             "preconditions": uc.preconditions,
+             "postconditions": uc.postconditions,
+             "related_routes": uc.related_routes,
+             "related_pages": uc.related_pages,
+             "related_entities": uc.related_entities,
+             "category": uc.category, "priority": uc.priority}
+            for uc in result.usecases
+        ],
+        "scenarios": [
+            {"usecase_id": sc.usecase_id, "usecase_name": sc.usecase_name,
+             "scenario_id": sc.scenario_id, "scenario_name": sc.scenario_name,
+             "scenario_type": sc.scenario_type,
+             "steps": [
+                 {"step_no": st.step_no, "actor": st.actor,
+                  "action": st.action,
+                  "expected_result": st.expected_result}
+                 for st in sc.steps
+             ],
+             "variations": sc.variations}
+            for sc in result.scenarios
+        ],
+        "state_machines": [
+            {"entity_name": sm.entity_name, "entity_class": sm.entity_class,
+             "state_field": sm.state_field, "states": sm.states,
+             "transitions": [
+                 {"from_state": t.from_state, "to_state": t.to_state,
+                  "trigger": t.trigger, "guard": t.guard}
+                 for t in sm.transitions
+             ],
+             "initial_state": sm.initial_state,
+             "final_states": sm.final_states}
+            for sm in result.state_machines
+        ],
+        "policies": [
+            {"id": bp.id, "name": bp.name, "category": bp.category,
+             "description": bp.description,
+             "related_entities": bp.related_entities,
+             "related_usecases": bp.related_usecases,
+             "severity": bp.severity}
+            for bp in result.policies
+        ],
+    }
+
+    out_path = output_dir / "usecases" / "generation_result.json"
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(
+        json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
+
+def _render_generate_viewer(
+    renderer, info_gen, result, output_dir: Path, project_name: str,
+) -> str:
+    """generate コマンド用のビューワーを生成する"""
+    from rdra.usecase_diagram import UsecaseDiagramGenerator
+    from rdra.activity_diagram import ActivityDiagramGenerator
+    from rdra.state_transition import StateTransitionGenerator
+
+    mermaid_sources: dict[str, str] = {}
+
+    mermaid_sources["information_model"] = info_gen.to_mermaid(
+        result.entities, result.relationships
+    )
+    groups = info_gen.group_by_usecase(
+        result.entities, result.relationships, result.usecases
+    )
+    if groups:
+        mermaid_sources["information_model_grouped"] = (
+            info_gen.to_mermaid_grouped(groups)
+        )
+
+    uc_gen = UsecaseDiagramGenerator(None)
+    mermaid_sources["usecase_diagram"] = uc_gen.generate_mermaid(result.usecases)
+    mermaid_sources["usecase_conditions"] = uc_gen.generate_conditions_mermaid(
+        result.usecases
+    )
+    for uc in result.usecases:
+        mermaid_sources[f"uc_condition_{uc.id}"] = (
+            uc_gen.generate_single_condition_mermaid(uc)
+        )
+
+    act_gen = ActivityDiagramGenerator()
+    mermaid_sources["scenarios_overview"] = (
+        act_gen.generate_all_scenarios_flowchart(result.scenarios)
+    )
+    uc_actor_map = {uc.id: uc.actor for uc in result.usecases}
+    for sc in result.scenarios:
+        actor_name = uc_actor_map.get(sc.usecase_id, "")
+        mermaid_sources[f"scenario_{sc.scenario_id}"] = (
+            act_gen.generate_sequence_diagram(sc, actor_name=actor_name)
+        )
+
+    st_gen = StateTransitionGenerator.__new__(StateTransitionGenerator)
+    for sm in result.state_machines:
+        mermaid_sources[f"state_{sm.entity_class}"] = st_gen.to_mermaid(sm)
+
+    rdra_dir = output_dir / "rdra"
+    viewer_path = renderer._render_viewer(
+        entities=result.entities,
+        relationships=result.relationships,
+        usecases=result.usecases,
+        scenarios=result.scenarios,
+        groups=groups,
+        state_machines=result.state_machines,
+        policies=result.policies,
+        mermaid_sources=mermaid_sources,
+        rdra_dir=rdra_dir,
     )
     return viewer_path
 

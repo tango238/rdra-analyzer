@@ -60,6 +60,8 @@ class MermaidRenderer:
         routes: list = None,
         controllers: list = None,
         entity_operations: list = None,
+        state_machines: list = None,
+        policies: list = None,
     ) -> list[str]:
         """
         全 RDRA ダイアグラムを Markdown ファイルとして出力する。
@@ -70,6 +72,8 @@ class MermaidRenderer:
             usecases: ユースケース一覧
             scenarios: 操作シナリオ一覧
             output_dir: 出力ディレクトリ
+            state_machines: 事前生成済み状態遷移（省略時はstate_transition_genで生成）
+            policies: 事前生成済みビジネスポリシー（省略時はbusiness_policy_extで生成）
 
         Returns:
             list[str]: 生成されたファイルパスの一覧
@@ -121,24 +125,27 @@ class MermaidRenderer:
         saved_files.extend(activity_files)
 
         # 5. 状態遷移図
-        state_machines = []
-        if self._state_gen:
-            state_machines = self._state_gen.generate(entities, routes, usecases)
-            if state_machines:
-                for m in state_machines:
-                    mermaid_sources[f"state_{m.entity_class}"] = self._state_gen.to_mermaid(m)
-                st_path = self._render_state_transitions(state_machines, rdra_dir)
-                saved_files.append(st_path)
+        if state_machines is None:
+            state_machines = []
+            if self._state_gen:
+                state_machines = self._state_gen.generate(entities, routes, usecases)
+        if state_machines:
+            st_renderer = self._state_gen or StateTransitionGenerator.__new__(StateTransitionGenerator)
+            for m in state_machines:
+                mermaid_sources[f"state_{m.entity_class}"] = st_renderer.to_mermaid(m)
+            st_path = self._render_state_transitions(state_machines, rdra_dir)
+            saved_files.append(st_path)
 
         # 6. ビジネスポリシー一覧
-        policies = []
-        if self._bp_ext:
-            policies = self._bp_ext.extract(
-                entities, usecases, routes, controllers,
-            )
-            if policies:
-                bp_path = self._render_business_policies(policies, rdra_dir)
-                saved_files.append(bp_path)
+        if policies is None:
+            policies = []
+            if self._bp_ext:
+                policies = self._bp_ext.extract(
+                    entities, usecases, routes, controllers,
+                )
+        if policies:
+            bp_path = self._render_business_policies(policies, rdra_dir)
+            saved_files.append(bp_path)
 
         # 7. インデックスページ
         index_path = self._render_index(
@@ -463,8 +470,9 @@ class MermaidRenderer:
 対象エンティティ数: {len(machines)}
 
 """
+        st_renderer = self._state_gen or StateTransitionGenerator.__new__(StateTransitionGenerator)
         for m in machines:
-            mermaid_content = self._state_gen.to_mermaid(m)
+            mermaid_content = st_renderer.to_mermaid(m)
             content += f"""## {m.entity_name}（{m.entity_class}.{m.state_field}）
 
 状態数: {len(m.states)} | 遷移数: {len(m.transitions)}

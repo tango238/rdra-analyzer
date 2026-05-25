@@ -1,10 +1,12 @@
 """
 パート2: RDRAモデル生成パッケージ
 
-ソースコードから RDRA の以下3つを生成する:
+ソースコードまたは要件定義テキストから RDRA モデルを生成する:
 1. 情報モデル（エンティティ・属性・関係）
 2. ユースケース複合図（アクター・ユースケース・条件・バリエーション）
 3. アクティビティ図（操作シナリオ）
+4. 状態遷移図
+5. ビジネスポリシー
 
 すべて Mermaid 記法の Markdown ファイルとして出力する。
 """
@@ -15,6 +17,7 @@ from .activity_diagram import ActivityDiagramGenerator
 from .state_transition import StateTransitionGenerator, EntityStateMachine, StateTransition
 from .business_policy import BusinessPolicyExtractor, BusinessPolicy
 from .mermaid_renderer import MermaidRenderer
+from .requirements_generator import RequirementsGenerator, RDRAGenerationResult
 
 __all__ = [
     "InformationModelGenerator",
@@ -29,4 +32,6 @@ __all__ = [
     "BusinessPolicyExtractor",
     "BusinessPolicy",
     "MermaidRenderer",
+    "RequirementsGenerator",
+    "RDRAGenerationResult",
 ]
