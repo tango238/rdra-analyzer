@@ -683,14 +683,26 @@ def run_scenarios(
     offset: int = typer.Option(
         0, "--offset", help="スキップするユースケース数（再開用）"
     ),
+    force: bool = typer.Option(
+        False, "--force", help="loop-e2e 一本化方針を無視して生成する"
+    ),
 ):
     """
     パート1補助: 保存済みユースケースJSONからシナリオを追加生成する。
 
-    analyze --no-scenarios 実行後に使用。
-    中断しても中間保存されているので --offset で再開可能。
+    [非推奨] シナリオの源泉は loop-e2e に一本化済み。rdra へは
+    'loop-e2e rdra-export' → 'reconcile' で取り込む。生成したい場合は --force。
     """
     _print_header("シナリオ生成（保存済みユースケースから）")
+
+    if not force:
+        console.print(
+            "[yellow]シナリオ生成は loop-e2e に一本化されています。[/yellow]\n"
+            "  loop-e2e でシナリオを生成し、'loop-e2e rdra-export' → "
+            "'python main.py reconcile' で取り込んでください。\n"
+            "  どうしても rdra 側で生成する場合は --force を付けてください。"
+        )
+        raise typer.Exit(0)
 
     config = _get_config()
     input_file = input_file or Path(config.output_dir) / "usecases" / "analysis_result.json"
@@ -812,6 +824,14 @@ def run_verify(
     usecases, scenarios = _load_analysis_result(data)
     console.print(f"  ユースケース: {len(usecases)}件 | シナリオ: {len(scenarios)}件")
 
+    # loop-e2e 由来(LE-)シナリオは loop-e2e 所有 → --fix では改変しない
+    le_owned = [s for s in scenarios if s.scenario_id.startswith("LE-")]
+    if fix and le_owned:
+        console.print(
+            f"  [cyan]LE- シナリオ {len(le_owned)}件は loop-e2e 所有のため --fix 対象外[/cyan]"
+        )
+        scenarios = [s for s in scenarios if not s.scenario_id.startswith("LE-")]
+
     # 画面仕様の読み込み
     screen_path = output_dir / "usecases" / "screen_specs.json"
     if not screen_path.exists():
@@ -829,7 +849,7 @@ def run_verify(
 
     # 中間保存コールバック
     def _save_progress(fixed_so_far, remaining):
-        all_scenarios = fixed_so_far + remaining
+        all_scenarios = le_owned + fixed_so_far + remaining
         builder = ScenarioBuilder(llm)
         builder.save_to_json(usecases, all_scenarios, analysis_path)
         console.print(f"    [dim]-> 中間保存: {len(fixed_so_far)}件修正済み[/dim]")
@@ -906,9 +926,9 @@ def run_verify(
             already_fixed=previously_fixed,
         )
 
-        # 修正後のシナリオを保存
+        # 修正後のシナリオを保存（LE- は所有元 loop-e2e のまま温存）
         builder = ScenarioBuilder(llm)
-        builder.save_to_json(usecases, fixed_scenarios, analysis_path)
+        builder.save_to_json(usecases, le_owned + fixed_scenarios, analysis_path)
         console.print(f"  -> 修正済みシナリオを保存: {analysis_path}")
 
         # 再検証
@@ -919,6 +939,90 @@ def run_verify(
         console.print(f"  修正後: 問題あり {with_issues} → {with_issues2}件 | 適合率 {avg_pass:.0%} → {avg_pass2:.0%}")
 
     console.print(f"\n[green]検証完了[/green]")
+
+
+@app.command("reconcile")
+def run_reconcile(
+    output_dir: Optional[Path] = typer.Option(
+        None, "--output", "-o", help="出力ディレクトリ"
+    ),
+    pending_file: Optional[Path] = typer.Option(
+        None, "--pending", help="loop-e2e-pending.json のパス（省略時は output/usecases/）"
+    ),
+):
+    """
+    loop-e2e 連携: loop-e2e-pending.json を取り込む（reconcile）
+
+    loop-e2e の 'rdra-export' がルート照合で当てられなかったシナリオを、
+    checkpoint でソースに当てて事実確認し、既存UC紐付け or 新規UC生成で
+    analysis_result.json に取り込む。LE- シナリオは loop-e2e 所有として冪等に扱う。
+    """
+    _print_header("loop-e2e シナリオ取り込み (reconcile)")
+    from analyzer.reconcile import reconcile, apply_reconcile, validate
+
+    config = _get_config()
+    output_dir = Path(output_dir or config.output_dir)
+    uc_dir = output_dir / "usecases"
+    analysis_path = uc_dir / "analysis_result.json"
+    pending_path = pending_file or (uc_dir / "loop-e2e-pending.json")
+    checkpoint_path = uc_dir / "_checkpoint.json"
+
+    if not analysis_path.exists():
+        console.print(
+            "[red]analysis_result.json が見つかりません。先に 'analyze' を実行してください。[/red]"
+        )
+        raise typer.Exit(1)
+    if not pending_path.exists():
+        console.print(
+            f"[yellow]{pending_path} が見つかりません。取り込むものがありません。[/yellow]"
+        )
+        raise typer.Exit(0)
+
+    analysis = json.loads(analysis_path.read_text(encoding="utf-8"))
+    pending = json.loads(pending_path.read_text(encoding="utf-8"))
+    checkpoint = (
+        json.loads(checkpoint_path.read_text(encoding="utf-8"))
+        if checkpoint_path.exists()
+        else {}
+    )
+
+    entries = pending.get("pending", [])
+    console.print(
+        f"  pending: {len(entries)}件 | 既存UC: {len(analysis.get('usecases', []))}件"
+    )
+    if not checkpoint:
+        console.print(
+            "[yellow]checkpoint が無いため事実確認できません（ルート照合のみ）。[/yellow]"
+        )
+    if not entries:
+        console.print("[green]取り込む pending はありません。[/green]")
+        raise typer.Exit(0)
+
+    result = reconcile(analysis, pending, checkpoint)
+    merged = apply_reconcile(analysis, result)
+
+    # 参照整合性チェック: 失敗時は書き戻さない
+    try:
+        validate(merged)
+    except ValueError as e:
+        console.print(f"[red]参照整合性チェック失敗: {e}[/red]")
+        console.print("[red]analysis_result.json は変更していません。[/red]")
+        raise typer.Exit(1)
+
+    analysis_path.write_text(
+        json.dumps(merged, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    # 取り込み済み pending を空にして書き戻す
+    pending["pending"] = []
+    pending_path.write_text(
+        json.dumps(pending, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
+    console.print(f"\n[green]取り込み完了[/green]")
+    console.print(f"  既存UCに紐付け: {result.linked}件")
+    console.print(f"  新規UC生成: {result.created}件")
+    console.print(f"  取り込みシナリオ: {len(result.reconciled)}件 (LE-)")
+    console.print(f"  -> {analysis_path}")
 
 
 @app.command("screens")
