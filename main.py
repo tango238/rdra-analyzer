@@ -1041,8 +1041,8 @@ def run_enrich(
     """
     _print_header("ユースケース related_* 補完 (enrich)")
     from analyzer.source_parser import ParsedRoute, ParsedPage
-    from analyzer.scenario_builder import ScenarioBuilder
     from analyzer.usecase_extractor import UsecaseExtractor
+    from analyzer.reconcile import _usecase_to_dict
 
     config = _get_config()
     output_dir = Path(output_dir or config.output_dir)
@@ -1058,7 +1058,7 @@ def run_enrich(
         raise typer.Exit(1)
 
     data = json.loads(analysis_path.read_text(encoding="utf-8"))
-    usecases, scenarios = _load_analysis_result(data)
+    usecases, _ = _load_analysis_result(data)
     cp = json.loads(cp_path.read_text(encoding="utf-8"))
     routes = [ParsedRoute(**r) for r in cp.get("routes", [])]
     pages = [ParsedPage(**p) for p in cp.get("pages", [])]
@@ -1070,7 +1070,15 @@ def run_enrich(
     extractor._enrich_controllers(usecases, routes)
     extractor._enrich_pages(usecases, pages)
 
-    ScenarioBuilder(None).save_to_json(usecases, scenarios, analysis_path)
+    # usecases のみ更新。scenarios・未知トップレベルフィールドは温存する
+    data["usecases"] = [_usecase_to_dict(u) for u in usecases]
+    md = dict(data.get("metadata", {}))
+    md["total_usecases"] = len(usecases)
+    md["total_scenarios"] = len(data.get("scenarios", []))
+    data["metadata"] = md
+    analysis_path.write_text(
+        json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
 
     c = sum(1 for u in usecases if u.related_controllers)
     v = sum(1 for u in usecases if u.related_views)
