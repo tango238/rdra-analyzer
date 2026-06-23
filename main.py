@@ -1025,6 +1025,79 @@ def run_reconcile(
     console.print(f"  -> {analysis_path}")
 
 
+@app.command("enrich")
+def run_enrich(
+    output_dir: Optional[Path] = typer.Option(
+        None, "--output", "-o", help="出力ディレクトリ"
+    ),
+):
+    """
+    ユースケースの related_* を checkpoint から再導出する（LLM不要）
+
+    既存 analysis_result.json の related_controllers / related_views /
+    related_pages を _checkpoint.json（routes / pages）から決定的に埋め直して保存する。
+    古い生成物の補完や、reconcile で新規UCを足した後のリフレッシュに使う。
+    related_pages は loop-e2e の navigate 照合・reconcile の紐付けキーになる。
+    """
+    _print_header("ユースケース related_* 補完 (enrich)")
+    from analyzer.source_parser import ParsedRoute, ParsedPage
+    from analyzer.usecase_extractor import UsecaseExtractor
+    from analyzer.reconcile import _usecase_to_dict
+    from analyzer.source_parser import from_checkpoint_dict
+
+    config = _get_config()
+    output_dir = Path(output_dir or config.output_dir)
+    uc_dir = output_dir / "usecases"
+    analysis_path = uc_dir / "analysis_result.json"
+    cp_path = uc_dir / "_checkpoint.json"
+
+    if not analysis_path.exists() or not cp_path.exists():
+        console.print(
+            "[red]analysis_result.json または _checkpoint.json が見つかりません。"
+            "先に 'analyze' を実行してください。[/red]"
+        )
+        raise typer.Exit(1)
+
+    try:
+        data = json.loads(analysis_path.read_text(encoding="utf-8"))
+        usecases, _ = _load_analysis_result(data)
+        cp = json.loads(cp_path.read_text(encoding="utf-8"))
+        routes = [from_checkpoint_dict(ParsedRoute, r) for r in cp.get("routes", [])]
+        pages = [from_checkpoint_dict(ParsedPage, p) for p in cp.get("pages", [])]
+    except (json.JSONDecodeError, KeyError, TypeError) as e:
+        console.print(
+            f"[red]入力ファイルの読み込みに失敗しました: {e}[/red]\n"
+            "  analysis_result.json / _checkpoint.json が壊れている可能性があります。"
+        )
+        raise typer.Exit(1)
+    console.print(
+        f"  UC: {len(usecases)}件 | routes: {len(routes)}件 | pages: {len(pages)}件"
+    )
+
+    extractor = UsecaseExtractor(None)
+    extractor._enrich_controllers(usecases, routes)
+    extractor._enrich_pages(usecases, pages)
+
+    # usecases のみ更新。scenarios・未知トップレベルフィールドは温存する
+    data["usecases"] = [_usecase_to_dict(u) for u in usecases]
+    md = dict(data.get("metadata", {}))
+    md["total_usecases"] = len(usecases)
+    md["total_scenarios"] = len(data.get("scenarios", []))
+    data["metadata"] = md
+    analysis_path.write_text(
+        json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
+    c = sum(1 for u in usecases if u.related_controllers)
+    v = sum(1 for u in usecases if u.related_views)
+    p = sum(1 for u in usecases if u.related_pages)
+    console.print("\n[green]補完完了[/green]")
+    console.print(f"  related_controllers 非空: {c}/{len(usecases)}")
+    console.print(f"  related_views 非空: {v}/{len(usecases)}")
+    console.print(f"  related_pages 非空: {p}/{len(usecases)}")
+    console.print(f"  -> {analysis_path}")
+
+
 @app.command("screens")
 def run_screens(
     repo: Optional[list[str]] = typer.Option(
@@ -1428,14 +1501,18 @@ def _build_viewer(output_dir: Path) -> str:
 
     # ---- チェックポイントからモデル・ルート読み込み ----
     cp_path = output_dir / "usecases" / "_checkpoint.json"
-    models, routes = [], []
+    models, routes, pages = [], [], []
     if cp_path.exists():
         cp = json.loads(cp_path.read_text(encoding="utf-8"))
-        models = [ParsedModel(**m) for m in cp.get("models", [])]
-        routes = [ParsedRoute(**r) for r in cp.get("routes", [])]
+        from analyzer.source_parser import ParsedPage, from_checkpoint_dict
+        models = [from_checkpoint_dict(ParsedModel, m) for m in cp.get("models", [])]
+        routes = [from_checkpoint_dict(ParsedRoute, r) for r in cp.get("routes", [])]
+        pages = [from_checkpoint_dict(ParsedPage, p) for p in cp.get("pages", [])]
 
-    # コントローラー紐付け
-    UsecaseExtractor(None)._enrich_controllers(usecases, routes)
+    # コントローラー・ページ紐付け（related_controllers / related_views / related_pages）
+    _extractor = UsecaseExtractor(None)
+    _extractor._enrich_controllers(usecases, routes)
+    _extractor._enrich_pages(usecases, pages)
 
     # ---- エンティティ・リレーション ----
     info_gen = InformationModelGenerator(llm_provider=None)
