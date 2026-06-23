@@ -1043,6 +1043,7 @@ def run_enrich(
     from analyzer.source_parser import ParsedRoute, ParsedPage
     from analyzer.usecase_extractor import UsecaseExtractor
     from analyzer.reconcile import _usecase_to_dict
+    from analyzer.source_parser import from_checkpoint_dict
 
     config = _get_config()
     output_dir = Path(output_dir or config.output_dir)
@@ -1057,11 +1058,18 @@ def run_enrich(
         )
         raise typer.Exit(1)
 
-    data = json.loads(analysis_path.read_text(encoding="utf-8"))
-    usecases, _ = _load_analysis_result(data)
-    cp = json.loads(cp_path.read_text(encoding="utf-8"))
-    routes = [ParsedRoute(**r) for r in cp.get("routes", [])]
-    pages = [ParsedPage(**p) for p in cp.get("pages", [])]
+    try:
+        data = json.loads(analysis_path.read_text(encoding="utf-8"))
+        usecases, _ = _load_analysis_result(data)
+        cp = json.loads(cp_path.read_text(encoding="utf-8"))
+        routes = [from_checkpoint_dict(ParsedRoute, r) for r in cp.get("routes", [])]
+        pages = [from_checkpoint_dict(ParsedPage, p) for p in cp.get("pages", [])]
+    except (json.JSONDecodeError, KeyError, TypeError) as e:
+        console.print(
+            f"[red]入力ファイルの読み込みに失敗しました: {e}[/red]\n"
+            "  analysis_result.json / _checkpoint.json が壊れている可能性があります。"
+        )
+        raise typer.Exit(1)
     console.print(
         f"  UC: {len(usecases)}件 | routes: {len(routes)}件 | pages: {len(pages)}件"
     )
@@ -1083,7 +1091,7 @@ def run_enrich(
     c = sum(1 for u in usecases if u.related_controllers)
     v = sum(1 for u in usecases if u.related_views)
     p = sum(1 for u in usecases if u.related_pages)
-    console.print(f"\n[green]補完完了[/green]")
+    console.print("\n[green]補完完了[/green]")
     console.print(f"  related_controllers 非空: {c}/{len(usecases)}")
     console.print(f"  related_views 非空: {v}/{len(usecases)}")
     console.print(f"  related_pages 非空: {p}/{len(usecases)}")
@@ -1496,10 +1504,10 @@ def _build_viewer(output_dir: Path) -> str:
     models, routes, pages = [], [], []
     if cp_path.exists():
         cp = json.loads(cp_path.read_text(encoding="utf-8"))
-        models = [ParsedModel(**m) for m in cp.get("models", [])]
-        routes = [ParsedRoute(**r) for r in cp.get("routes", [])]
-        from analyzer.source_parser import ParsedPage
-        pages = [ParsedPage(**p) for p in cp.get("pages", [])]
+        from analyzer.source_parser import ParsedPage, from_checkpoint_dict
+        models = [from_checkpoint_dict(ParsedModel, m) for m in cp.get("models", [])]
+        routes = [from_checkpoint_dict(ParsedRoute, r) for r in cp.get("routes", [])]
+        pages = [from_checkpoint_dict(ParsedPage, p) for p in cp.get("pages", [])]
 
     # コントローラー・ページ紐付け（related_controllers / related_views / related_pages）
     _extractor = UsecaseExtractor(None)

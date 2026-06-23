@@ -106,3 +106,85 @@ def test_enrich_pages_empty_pages_is_noop():
     uc = _uc("UC-010", ["GET /x"], related_pages=["/keep"])
     UsecaseExtractor(None)._enrich_pages([uc], [])
     assert uc.related_pages == ["/keep"]
+
+
+def test_enrich_pages_is_idempotent():
+    uc = _uc("UC-010", ["GET /api/v1/x"])
+    pages = [_page("/p", "C", ["GET /x"])]
+    UsecaseExtractor(None)._enrich_pages([uc], pages)
+    first_pages, first_views = list(uc.related_pages), list(uc.related_views)
+    UsecaseExtractor(None)._enrich_pages([uc], pages)  # 2回目
+    assert uc.related_pages == first_pages
+    assert uc.related_views == first_views
+
+
+def test_enrich_pages_preserves_existing_related_views():
+    # 既存(LLM由来)の related_views は no-match でも温存される
+    uc = _uc("UC-010", ["GET /x"])
+    uc.related_views = ["LegacyView"]
+    pages = [_page("/other", "C", ["GET /unrelated"])]
+    UsecaseExtractor(None)._enrich_pages([uc], pages)
+    assert "LegacyView" in uc.related_views
+
+
+# --------------------------------------------------------------------------- #
+# from_checkpoint_dict（スキーマdrift耐性）
+# --------------------------------------------------------------------------- #
+def test_from_checkpoint_dict_filters_unknown_keys():
+    from analyzer.source_parser import from_checkpoint_dict
+    d = {"method": "GET", "path": "/x", "controller": "C", "action": "i",
+         "middleware": [], "prefix": "", "FUTURE_FIELD": "ignored"}
+    r = from_checkpoint_dict(ParsedRoute, d)
+    assert r.method == "GET" and r.path == "/x"  # 未知キーで落ちない
+
+
+# --------------------------------------------------------------------------- #
+# enrich コマンド: 未知トップレベル/scenarios の温存（round-trip）
+# --------------------------------------------------------------------------- #
+def test_enrich_command_preserves_unknown_toplevel_and_scenarios(tmp_path, monkeypatch):
+    import json
+    import main
+
+    uc_dir = tmp_path / "usecases"
+    uc_dir.mkdir(parents=True)
+    analysis = {
+        "metadata": {"total_usecases": 1, "total_scenarios": 1},
+        "usecases": [{
+            "id": "UC-001", "name": "n", "actor": "ユーザー", "description": "",
+            "preconditions": [], "postconditions": [],
+            "related_routes": ["GET /api/v1/operator/x"], "related_pages": [],
+            "related_entities": [], "related_controllers": [], "related_views": [],
+            "category": "", "priority": "medium",
+        }],
+        "scenarios": [{
+            "scenario_id": "LE-x", "usecase_id": "UC-001", "usecase_name": "n",
+            "scenario_name": "s", "scenario_type": "normal", "frontend_url": "",
+            "api_endpoint": "", "steps": [], "variations": [], "extra_scn": "KEEP2",
+        }],
+        "custom_top": "KEEP_ME",
+    }
+    checkpoint = {
+        "routes": [{"method": "GET", "path": "/api/v1/operator/x", "controller": "XController",
+                    "action": "index", "middleware": []}],
+        "pages": [{"route_path": "/x-page", "file_path": "x.tsx", "component_name": "XPage",
+                   "page_type": "list", "api_calls": ["GET /operator/x"], "imported_hooks": []}],
+    }
+    (uc_dir / "analysis_result.json").write_text(
+        json.dumps(analysis, ensure_ascii=False), encoding="utf-8")
+    (uc_dir / "_checkpoint.json").write_text(
+        json.dumps(checkpoint, ensure_ascii=False), encoding="utf-8")
+
+    class _Cfg:
+        output_dir = tmp_path
+    monkeypatch.setattr(main, "_get_config", lambda: _Cfg())
+
+    main.run_enrich(output_dir=tmp_path)
+
+    out = json.loads((uc_dir / "analysis_result.json").read_text(encoding="utf-8"))
+    assert out["custom_top"] == "KEEP_ME"                  # 未知トップレベル温存
+    assert out["scenarios"][0]["extra_scn"] == "KEEP2"     # scenario未知フィールド温存
+    assert out["scenarios"][0]["scenario_id"] == "LE-x"
+    # 補完が効いている
+    assert out["usecases"][0]["related_controllers"] == ["XController"]
+    assert "/x-page" in out["usecases"][0]["related_pages"]
+    assert out["metadata"]["total_scenarios"] == 1
