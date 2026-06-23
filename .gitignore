@@ -25,3 +25,7 @@ output/
 # OS
 .DS_Store
 Thumbs.db
+
+# Claude Code / 作業ツリー（ローカル成果物）
+.claude/
+.worktrees/
