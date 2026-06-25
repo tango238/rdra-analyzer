@@ -755,7 +755,16 @@ def run_reconcile(
         console.print("[green]取り込む pending はありません。[/green]")
         raise typer.Exit(0)
 
-    result = reconcile(analysis, pending, checkpoint)
+    # 棄却ログを読み、救済（静的棄却UC＋loop-e2e実績→再昇格）の候補にする。sync #1 follow-on
+    from analyzer.rejection_log import load_rejected, rejected_to_dict
+    rejection_path = uc_dir / "rejection_log.json"
+    rejected = (
+        load_rejected(json.loads(rejection_path.read_text(encoding="utf-8")))
+        if rejection_path.exists()
+        else []
+    )
+
+    result = reconcile(analysis, pending, checkpoint, rejected=rejected)
     merged = apply_reconcile(analysis, result)
 
     # 参照整合性チェック: 失敗時は書き戻さない
@@ -775,6 +784,18 @@ def run_reconcile(
         json.dumps(pending, ensure_ascii=False, indent=2), encoding="utf-8"
     )
 
+    # 救済された UC を棄却ログから除去して書き戻す（もう棄却ではない）。sync #1 follow-on
+    if result.rescued and rejection_path.exists():
+        rescued_ids = {uc.id for uc in result.rescued}
+        remaining = [r for r in rejected if r.id not in rescued_ids]
+        rejection_path.write_text(
+            json.dumps(
+                {"rejected": [rejected_to_dict(r) for r in remaining]},
+                ensure_ascii=False, indent=2,
+            ),
+            encoding="utf-8",
+        )
+
     # 矛盾（要調査）レポートを出力（コードを真・UC は上書きしない）。sync #4
     from analyzer.conflict_report import conflict_to_dict
     conflict_path = uc_dir / "conflict_report.json"
@@ -789,6 +810,10 @@ def run_reconcile(
     console.print(f"\n[green]取り込み完了[/green]")
     console.print(f"  既存UCに紐付け: {result.linked}件")
     console.print(f"  新規UC生成: {result.created}件")
+    if result.rescued:
+        console.print(
+            f"  [cyan]棄却UCを実績で救済: {len(result.rescued)}件（実績由来・derived）[/cyan]"
+        )
     console.print(f"  取り込みシナリオ: {len(result.reconciled)}件 (LE-)")
     if result.conflicts:
         console.print(
