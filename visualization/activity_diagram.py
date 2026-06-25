@@ -4,7 +4,7 @@
 操作シナリオの各ステップを Mermaid のsequenceDiagram または flowchart で表現する。
 """
 
-from analyzer.scenario_builder import OperationScenario, OperationStep
+from shared.scenario_builder import OperationScenario, OperationStep
 
 
 class ActivityDiagramGenerator:

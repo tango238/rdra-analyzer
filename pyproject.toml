@@ -25,7 +25,7 @@ rdra = "main:app"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["rdra_analyzer*", "llm*", "analyzer*", "rdra*", "gap*", "workflow*"]
+include = ["llm*", "shared*", "context*", "extraction*", "reconciliation*", "visualization*", "workflow*"]
 
 [tool.ruff]
 line-length = 100

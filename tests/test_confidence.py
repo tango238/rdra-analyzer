@@ -4,16 +4,16 @@
 合成・LLM 推論 = inferred の三値を、抽出物に付与・永続化できることを検証する。
 """
 
-from analyzer.reconcile import (
+from reconciliation.reconcile import (
     PendingEntry,
     ReconcileFacts,
     _load_usecases,
     _synthesize_usecase,
     _usecase_to_dict,
 )
-from analyzer.source_parser import EntityOperation
-from analyzer.usecase_extractor import Usecase
-from confidence import coerce, rank
+from extraction.source_parser import EntityOperation
+from extraction.usecase_extractor import Usecase
+from shared.confidence import coerce, rank
 
 
 def _uc(**kw) -> Usecase:

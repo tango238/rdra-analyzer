@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from .usecase_extractor import Usecase
+from extraction.usecase_extractor import Usecase
 
 # UC をコードへ接地する証拠アンカー。いずれか1つでもあれば確定モデルに残す。
 _EVIDENCE_FIELDS: tuple[str, ...] = (

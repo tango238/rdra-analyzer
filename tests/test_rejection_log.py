@@ -4,7 +4,7 @@
 棄却ログへ退避する。棄却＝破棄ではなく、理由＋欠落証拠を記録する。
 """
 
-from analyzer.rejection_log import (
+from extraction.rejection_log import (
     RejectedUsecase,
     has_code_evidence,
     load_rejected,
@@ -12,7 +12,7 @@ from analyzer.rejection_log import (
     partition_usecases,
     rejected_to_dict,
 )
-from analyzer.usecase_extractor import Usecase
+from extraction.usecase_extractor import Usecase
 
 
 def _uc(uc_id: str = "UC-001", **kw) -> Usecase:

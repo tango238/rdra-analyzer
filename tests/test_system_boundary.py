@@ -4,8 +4,8 @@
 enrich の照合結果（related_pages/related_views/related_routes）から決定的に生成する（LLM 不要）。
 """
 
-from analyzer.usecase_extractor import Usecase
-from rdra.system_boundary import SystemBoundaryGenerator
+from extraction.usecase_extractor import Usecase
+from extraction.derived.system_boundary import SystemBoundaryGenerator
 
 
 def _uc(**kw) -> Usecase:

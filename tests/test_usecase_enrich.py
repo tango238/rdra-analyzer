@@ -1,6 +1,6 @@
 """UsecaseExtractor の related_* 補完（_enrich_controllers / _enrich_pages）テスト"""
-from analyzer.source_parser import ParsedPage, ParsedRoute
-from analyzer.usecase_extractor import (
+from extraction.source_parser import ParsedPage, ParsedRoute
+from extraction.usecase_extractor import (
     Usecase,
     UsecaseExtractor,
     _api_paths_match,
@@ -131,7 +131,7 @@ def test_enrich_pages_preserves_existing_related_views():
 # from_checkpoint_dict（スキーマdrift耐性）
 # --------------------------------------------------------------------------- #
 def test_from_checkpoint_dict_filters_unknown_keys():
-    from analyzer.source_parser import from_checkpoint_dict
+    from extraction.source_parser import from_checkpoint_dict
     d = {"method": "GET", "path": "/x", "controller": "C", "action": "i",
          "middleware": [], "prefix": "", "FUTURE_FIELD": "ignored"}
     r = from_checkpoint_dict(ParsedRoute, d)

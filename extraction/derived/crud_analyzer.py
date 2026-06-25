@@ -11,10 +11,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from datetime import datetime
 
-from rdra.information_model import Entity
-from analyzer.scenario_builder import OperationScenario
-from analyzer.usecase_extractor import Usecase
-from analyzer.source_parser import ParsedRoute, EntityOperation
+from extraction.derived.information_model import Entity
+from shared.scenario_builder import OperationScenario
+from extraction.usecase_extractor import Usecase
+from extraction.source_parser import ParsedRoute, EntityOperation
 
 
 @dataclass

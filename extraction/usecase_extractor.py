@@ -12,9 +12,9 @@ import json
 import re
 from dataclasses import dataclass, field
 
-from confidence import CONFIRMED, Confidence
+from shared.confidence import CONFIRMED, Confidence
 from llm.provider import LLMProvider
-from .source_parser import ParsedRoute, ParsedController, ParsedModel, ParsedPage
+from extraction.source_parser import ParsedRoute, ParsedController, ParsedModel, ParsedPage
 
 
 @dataclass

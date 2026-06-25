@@ -32,7 +32,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Callable, Optional
 
 if TYPE_CHECKING:
-    from analyzer.source_parser import RepoParseResult
+    from extraction.source_parser import RepoParseResult
 
 import typer
 from rich.console import Console
@@ -121,7 +121,7 @@ def show_config(
                 console.print(f"      [dim]{ctx_file} あり[/dim]")
 
         # フレームワーク検出
-        from analyzer.project_context import build_context
+        from context.project_context import build_context
         ctx = build_context(repo_path)
         if ctx.detected_frameworks:
             console.print(f"      [dim]フレームワーク: {', '.join(ctx.detected_frameworks)}[/dim]")
@@ -129,7 +129,7 @@ def show_config(
 
 def _save_parse_checkpoint(data: dict, checkpoint_path: Path) -> None:
     """ソースコード解析の中間結果を保存する"""
-    from analyzer.source_parser import ParsedRoute, ParsedController, ParsedModel, ParsedPage
+    from extraction.source_parser import ParsedRoute, ParsedController, ParsedModel, ParsedPage
 
     def _route_to_dict(r: ParsedRoute) -> dict:
         return {"method": r.method, "path": r.path, "controller": r.controller,
@@ -174,7 +174,7 @@ def _load_parse_checkpoint(checkpoint_path: Path) -> dict | None:
     """ソースコード解析の中間結果を読み込む"""
     if not checkpoint_path.exists():
         return None
-    from analyzer.source_parser import ParsedRoute, ParsedController, ParsedModel, ParsedPage, EntityOperation
+    from extraction.source_parser import ParsedRoute, ParsedController, ParsedModel, ParsedPage, EntityOperation
 
     data = json.loads(checkpoint_path.read_text(encoding="utf-8"))
     routes = [ParsedRoute(**r) for r in data.get("routes", [])]
@@ -231,7 +231,7 @@ def _parse_single_repo(repo_path: Path, parser) -> "RepoParseResult":
     config.repo_paths 順に事前構築する必要があるため。
     （parse_repo 内部では独自に build_context を呼ぶがそれは LLM プロンプト用）
     """
-    from analyzer.source_parser import RepoParseResult
+    from extraction.source_parser import RepoParseResult
 
     repo_name = repo_path.name
     try:
@@ -394,8 +394,8 @@ def run_analyze(
     all_contexts = []
     completed_repos = set(checkpoint["completed_repos"]) if checkpoint else set()
 
-    from analyzer.source_parser import SourceParser
-    from analyzer.project_context import format_context_for_prompt, build_context
+    from extraction.source_parser import SourceParser
+    from context.project_context import format_context_for_prompt, build_context
     parser = SourceParser(llm_provider=llm)
 
     # 全リポの context を順序通り prebuild（軽量処理、並列化不要）
@@ -519,7 +519,7 @@ def run_analyze(
 
     # 既存の画面仕様があれば読み込んでスキップ
     if resume and screen_path.exists():
-        from analyzer.screen_analyzer import ScreenAnalyzer
+        from extraction.screen_analyzer import ScreenAnalyzer
         screen_specs = ScreenAnalyzer.load_from_json(screen_path)
         if screen_specs:
             console.print(f"\n  [cyan]既存の画面仕様 {len(screen_specs)}件を読み込み（スキップ）[/cyan]")
@@ -527,8 +527,8 @@ def run_analyze(
     if not screen_specs and all_pages and not skip_llm:
         console.print()
         _print_header("画面分析")
-        from analyzer.source_parser import ParsedPage
-        from analyzer.screen_analyzer import ScreenAnalyzer
+        from extraction.source_parser import ParsedPage
+        from extraction.screen_analyzer import ScreenAnalyzer
 
         screen_analyzer = ScreenAnalyzer(llm)
 
@@ -597,7 +597,7 @@ def run_analyze(
     # ユースケース抽出（画面分析結果を活用）
     if skip_llm:
         console.print("[yellow]LLM呼び出しをスキップします[/yellow]")
-        from analyzer.usecase_extractor import UsecaseExtractor
+        from extraction.usecase_extractor import UsecaseExtractor
         extractor = UsecaseExtractor(None)
         usecases = extractor._fallback_extraction(routes)
         usecases = extractor._assign_ids(extractor._deduplicate(usecases))
@@ -627,7 +627,7 @@ def run_analyze(
             console.print("[dim]LLMでユースケースを抽出中...[/dim]")
             if screen_specs:
                 console.print(f"  [dim]画面仕様 {len(screen_specs)}件をコンテキストに含めます[/dim]")
-            from analyzer.usecase_extractor import UsecaseExtractor
+            from extraction.usecase_extractor import UsecaseExtractor
             extractor = UsecaseExtractor(llm, project_context=project_context_text)
 
             # バッチ処理を手動で行い、中間ログ出力
@@ -651,7 +651,7 @@ def run_analyze(
 
                 # 中間保存
                 temp_usecases = extractor._assign_ids(extractor._deduplicate(list(usecases)))
-                from analyzer.scenario_builder import ScenarioBuilder
+                from shared.scenario_builder import ScenarioBuilder
                 builder = ScenarioBuilder(llm)
                 builder.save_to_json(temp_usecases, [], output_path)
                 console.print(f"    [dim]-> 中間保存: {output_path}[/dim]")
@@ -662,7 +662,7 @@ def run_analyze(
 
         # Precision 棄却（opt-in）: コード証拠なき UC を確定モデルから外し棄却ログへ（sync #1）
         if strict:
-            from analyzer.rejection_log import partition_usecases, rejected_to_dict
+            from extraction.rejection_log import partition_usecases, rejected_to_dict
             usecases, rejected = partition_usecases(usecases)
             rejection_path = output_dir / "usecases" / "rejection_log.json"
             rejection_path.parent.mkdir(parents=True, exist_ok=True)
@@ -679,7 +679,7 @@ def run_analyze(
             )
 
         # ユースケースを保存
-        from analyzer.scenario_builder import ScenarioBuilder
+        from shared.scenario_builder import ScenarioBuilder
         builder = ScenarioBuilder(llm)
         builder.save_to_json(usecases, [], output_path)
         console.print(f"  [dim]-> ユースケースを保存: {output_path}[/dim]")
@@ -715,7 +715,7 @@ def run_reconcile(
     analysis_result.json に取り込む。LE- シナリオは loop-e2e 所有として冪等に扱う。
     """
     _print_header("loop-e2e シナリオ取り込み (reconcile)")
-    from analyzer.reconcile import reconcile, apply_reconcile, validate
+    from reconciliation.reconcile import reconcile, apply_reconcile, validate
 
     config = _get_config()
     output_dir = Path(output_dir or config.output_dir)
@@ -756,7 +756,7 @@ def run_reconcile(
         raise typer.Exit(0)
 
     # 棄却ログを読み、救済（静的棄却UC＋loop-e2e実績→再昇格）の候補にする。sync #1 follow-on
-    from analyzer.rejection_log import load_rejected, rejected_to_dict
+    from extraction.rejection_log import load_rejected, rejected_to_dict
     rejection_path = uc_dir / "rejection_log.json"
     rejected = (
         load_rejected(json.loads(rejection_path.read_text(encoding="utf-8")))
@@ -797,7 +797,7 @@ def run_reconcile(
         )
 
     # 矛盾（要調査）レポートを出力（コードを真・UC は上書きしない）。sync #4
-    from analyzer.conflict_report import conflict_to_dict
+    from reconciliation.conflict_report import conflict_to_dict
     conflict_path = uc_dir / "conflict_report.json"
     conflict_path.write_text(
         json.dumps(
@@ -837,10 +837,10 @@ def run_enrich(
     related_pages は loop-e2e の navigate 照合・reconcile の紐付けキーになる。
     """
     _print_header("ユースケース related_* 補完 (enrich)")
-    from analyzer.source_parser import ParsedRoute, ParsedPage
-    from analyzer.usecase_extractor import UsecaseExtractor
-    from analyzer.reconcile import _usecase_to_dict
-    from analyzer.source_parser import from_checkpoint_dict
+    from extraction.source_parser import ParsedRoute, ParsedPage
+    from extraction.usecase_extractor import UsecaseExtractor
+    from reconciliation.reconcile import _usecase_to_dict
+    from extraction.source_parser import from_checkpoint_dict
 
     config = _get_config()
     output_dir = Path(output_dir or config.output_dir)
@@ -926,7 +926,7 @@ def run_screens(
         console.print("[red]チェックポイントが見つかりません。先に 'analyze' を実行してください。[/red]")
         raise typer.Exit(1)
 
-    from analyzer.source_parser import ParsedPage
+    from extraction.source_parser import ParsedPage
     cp = json.loads(cp_path.read_text(encoding="utf-8"))
     pages = [ParsedPage(**p) for p in cp.get("pages", [])]
     console.print(f"  ページ数: {len(pages)}件")
@@ -936,7 +936,7 @@ def run_screens(
         raise typer.Exit(0)
 
     llm = _get_llm()
-    from analyzer.screen_analyzer import ScreenAnalyzer
+    from extraction.screen_analyzer import ScreenAnalyzer
     analyzer = ScreenAnalyzer(llm)
 
     # フロントエンドリポジトリを特定
@@ -964,7 +964,7 @@ def run_screens(
     console.print(f"  -> レイアウト: {len(shared_layouts)}件")
 
     # Phase B: 個別ページをバッチで
-    from analyzer.project_context import build_context, format_context_for_prompt
+    from context.project_context import build_context, format_context_for_prompt
     ctx = build_context(frontend_repo)
     context_text = format_context_for_prompt([ctx])
 
@@ -1057,7 +1057,7 @@ def run_rdra(
         console.print("'python main.py analyze' を再実行してください。")
         raise typer.Exit(1)
 
-    from analyzer.source_parser import ParsedRoute, ParsedController, ParsedModel, EntityOperation
+    from extraction.source_parser import ParsedRoute, ParsedController, ParsedModel, EntityOperation
     models = [ParsedModel(**m) if isinstance(m, dict) else m for m in cp["models"]]
     all_routes = [ParsedRoute(**r) if isinstance(r, dict) else r for r in cp["routes"]]
     all_controllers = [ParsedController(**c) if isinstance(c, dict) else c for c in cp["controllers"]]
@@ -1070,7 +1070,7 @@ def run_rdra(
     # プロジェクトコンテキスト構築
     project_context_text = ""
     if config.repo_paths:
-        from analyzer.project_context import build_context, format_context_for_prompt
+        from context.project_context import build_context, format_context_for_prompt
         all_contexts = [build_context(rp) for rp in config.repo_paths]
         project_context_text = format_context_for_prompt(all_contexts)
 
@@ -1078,17 +1078,17 @@ def run_rdra(
 
     # 情報モデル生成
     console.print("[dim]情報モデルを生成中...[/dim]")
-    from rdra.information_model import InformationModelGenerator
+    from extraction.derived.information_model import InformationModelGenerator
     info_gen = InformationModelGenerator(llm, project_context=project_context_text)
     entities, relationships = info_gen.generate(models)
     console.print(f"  -> エンティティ: {len(entities)}件 | リレーション: {len(relationships)}件")
 
     # ユースケース複合図・アクティビティ図・状態遷移図・ビジネスポリシーの生成と保存
-    from rdra.usecase_diagram import UsecaseDiagramGenerator
-    from rdra.activity_diagram import ActivityDiagramGenerator
-    from rdra.state_transition import StateTransitionGenerator
-    from rdra.business_policy import BusinessPolicyExtractor
-    from rdra.mermaid_renderer import MermaidRenderer
+    from visualization.usecase_diagram import UsecaseDiagramGenerator
+    from visualization.activity_diagram import ActivityDiagramGenerator
+    from extraction.derived.state_transition import StateTransitionGenerator
+    from extraction.derived.business_policy import BusinessPolicyExtractor
+    from visualization.mermaid_renderer import MermaidRenderer
 
     state_gen = StateTransitionGenerator(llm, project_context=project_context_text)
     bp_ext = BusinessPolicyExtractor(llm, project_context=project_context_text)
@@ -1118,7 +1118,7 @@ def run_rdra(
     )
 
     # システム境界図（接点＝画面 × 起点＝エンドポイント）を決定的に生成。sync #3
-    from rdra.system_boundary import SystemBoundaryGenerator
+    from extraction.derived.system_boundary import SystemBoundaryGenerator
     boundary_mermaid = SystemBoundaryGenerator().generate_mermaid(usecases)
     boundary_path = output_dir / "rdra" / "system_boundary.md"
     boundary_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1190,7 +1190,7 @@ def run_gap(
         console.print("'python main.py analyze' を再実行してください。")
         raise typer.Exit(1)
 
-    from analyzer.source_parser import ParsedRoute, ParsedModel, EntityOperation
+    from extraction.source_parser import ParsedRoute, ParsedModel, EntityOperation
     routes = [ParsedRoute(**r) if isinstance(r, dict) else r for r in cp["routes"]]
     models = [ParsedModel(**m) if isinstance(m, dict) else m for m in cp["models"]]
     entity_operations = [
@@ -1202,18 +1202,18 @@ def run_gap(
     # プロジェクトコンテキスト構築
     project_context_text = ""
     if config.repo_paths:
-        from analyzer.project_context import build_context, format_context_for_prompt
+        from context.project_context import build_context, format_context_for_prompt
         all_contexts = [build_context(rp) for rp in config.repo_paths]
         project_context_text = format_context_for_prompt(all_contexts)
 
     # エンティティ生成（LLMなしで実行）
-    from rdra.information_model import InformationModelGenerator
+    from extraction.derived.information_model import InformationModelGenerator
     info_gen = InformationModelGenerator(None, project_context=project_context_text)
     entities, _ = info_gen.generate(models)
 
     # CRUDギャップ分析
     console.print("[dim]CRUDギャップを分析中...[/dim]")
-    from gap.crud_analyzer import CrudAnalyzer
+    from extraction.derived.crud_analyzer import CrudAnalyzer
     analyzer = CrudAnalyzer()
     statuses, gaps = analyzer.analyze(entities, routes, scenarios, usecases, entity_operations)
 
@@ -1232,14 +1232,14 @@ def run_gap(
 def _build_viewer(output_dir: Path) -> str:
     """既存の解析結果・RDRAモデルからビューワーHTMLを再生成する"""
     import re
-    from rdra.information_model import InformationModelGenerator
-    from rdra.mermaid_renderer import MermaidRenderer
-    from rdra.usecase_diagram import UsecaseDiagramGenerator
-    from rdra.activity_diagram import ActivityDiagramGenerator
-    from rdra.state_transition import StateTransitionGenerator, EntityStateMachine, StateTransition
-    from rdra.business_policy import BusinessPolicy
-    from analyzer.usecase_extractor import UsecaseExtractor
-    from analyzer.source_parser import ParsedModel, ParsedRoute
+    from extraction.derived.information_model import InformationModelGenerator
+    from visualization.mermaid_renderer import MermaidRenderer
+    from visualization.usecase_diagram import UsecaseDiagramGenerator
+    from visualization.activity_diagram import ActivityDiagramGenerator
+    from extraction.derived.state_transition import StateTransitionGenerator, EntityStateMachine, StateTransition
+    from extraction.derived.business_policy import BusinessPolicy
+    from extraction.usecase_extractor import UsecaseExtractor
+    from extraction.source_parser import ParsedModel, ParsedRoute
 
     # ---- ユースケース・シナリオ読み込み ----
     analysis_path = output_dir / "usecases" / "analysis_result.json"
@@ -1253,7 +1253,7 @@ def _build_viewer(output_dir: Path) -> str:
     models, routes, pages = [], [], []
     if cp_path.exists():
         cp = json.loads(cp_path.read_text(encoding="utf-8"))
-        from analyzer.source_parser import ParsedPage, from_checkpoint_dict
+        from extraction.source_parser import ParsedPage, from_checkpoint_dict
         models = [from_checkpoint_dict(ParsedModel, m) for m in cp.get("models", [])]
         routes = [from_checkpoint_dict(ParsedRoute, r) for r in cp.get("routes", [])]
         pages = [from_checkpoint_dict(ParsedPage, p) for p in cp.get("pages", [])]
@@ -1268,7 +1268,7 @@ def _build_viewer(output_dir: Path) -> str:
     entities, relationships = info_gen.generate(models)
 
     # ---- ビジネスポリシー（.md からパース）----
-    from rdra.business_policy import CodeReference
+    from extraction.derived.business_policy import CodeReference
     policies = []
     bp_path = output_dir / "rdra" / "business_policies.md"
     if bp_path.exists():
@@ -1381,7 +1381,7 @@ def _build_viewer(output_dir: Path) -> str:
     screen_specs = []
     screen_path = output_dir / "usecases" / "screen_specs.json"
     if screen_path.exists():
-        from analyzer.screen_analyzer import ScreenAnalyzer
+        from extraction.screen_analyzer import ScreenAnalyzer
         screen_specs = ScreenAnalyzer.load_from_json(screen_path)
 
     # ---- ビューワー生成 ----
@@ -1533,8 +1533,8 @@ def _load_analysis_result(data: dict):
     """
     JSONデータからユースケースと操作シナリオを復元する。
     """
-    from analyzer.usecase_extractor import Usecase
-    from analyzer.scenario_builder import OperationScenario, OperationStep
+    from extraction.usecase_extractor import Usecase
+    from shared.scenario_builder import OperationScenario, OperationStep
 
     usecases = [
         Usecase(

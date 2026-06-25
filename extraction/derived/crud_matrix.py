@@ -11,8 +11,8 @@ from __future__ import annotations
 
 import re
 
-from analyzer.source_parser import EntityOperation, ParsedRoute
-from analyzer.usecase_extractor import Usecase
+from extraction.source_parser import EntityOperation, ParsedRoute
+from extraction.usecase_extractor import Usecase
 
 # ---------------------------------------------------------------------------
 # 動詞 → CRUD 辞書 (Tier 2)

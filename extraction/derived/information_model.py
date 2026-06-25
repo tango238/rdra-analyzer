@@ -13,7 +13,7 @@ import re
 from dataclasses import dataclass, field
 
 from llm.provider import LLMProvider
-from analyzer.source_parser import ParsedModel
+from extraction.source_parser import ParsedModel
 
 
 @dataclass

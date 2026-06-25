@@ -18,11 +18,11 @@ import re
 from dataclasses import dataclass, field, replace
 from typing import Optional
 
-from confidence import DERIVED, INFERRED, coerce
-from .conflict_report import Conflict
-from .rejection_log import RejectedUsecase
-from .scenario_builder import OperationScenario, OperationStep
-from .usecase_extractor import Usecase
+from shared.confidence import DERIVED, INFERRED, coerce
+from reconciliation.conflict_report import Conflict
+from extraction.rejection_log import RejectedUsecase
+from shared.scenario_builder import OperationScenario, OperationStep
+from extraction.usecase_extractor import Usecase
 
 _METHOD_RE = re.compile(
     r"^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS|ANY)\s+", re.IGNORECASE

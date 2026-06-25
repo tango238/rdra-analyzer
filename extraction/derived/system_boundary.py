@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import re
 
-from analyzer.usecase_extractor import Usecase
+from extraction.usecase_extractor import Usecase
 
 
 def _safe_id(prefix: str, text: str) -> str:

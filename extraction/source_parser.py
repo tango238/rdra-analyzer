@@ -11,7 +11,7 @@ import re
 from pathlib import Path
 from dataclasses import dataclass, field, fields as _dc_fields
 
-from confidence import CONFIRMED, Confidence
+from shared.confidence import CONFIRMED, Confidence
 
 
 def from_checkpoint_dict(cls, d: dict):
@@ -25,7 +25,7 @@ def from_checkpoint_dict(cls, d: dict):
 from typing import Optional
 
 from config import get_config
-from analyzer.project_context import (
+from context.project_context import (
     ProjectContext,
     build_context,
     format_context_for_prompt,

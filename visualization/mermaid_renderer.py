@@ -8,15 +8,15 @@ import json
 from pathlib import Path
 from datetime import datetime
 
-from analyzer.usecase_extractor import Usecase
-from analyzer.scenario_builder import OperationScenario
-from .information_model import Entity, Relationship, InformationGroup, InformationModelGenerator
-from .usecase_diagram import UsecaseDiagramGenerator
-from .activity_diagram import ActivityDiagramGenerator
-from .state_transition import StateTransitionGenerator, EntityStateMachine
-from .business_policy import BusinessPolicyExtractor, BusinessPolicy
-from .viewer_template import generate_viewer_html
-from .crud_matrix import build_uc_entity_crud_index
+from extraction.usecase_extractor import Usecase
+from shared.scenario_builder import OperationScenario
+from extraction.derived.information_model import Entity, Relationship, InformationGroup, InformationModelGenerator
+from visualization.usecase_diagram import UsecaseDiagramGenerator
+from visualization.activity_diagram import ActivityDiagramGenerator
+from extraction.derived.state_transition import StateTransitionGenerator, EntityStateMachine
+from extraction.derived.business_policy import BusinessPolicyExtractor, BusinessPolicy
+from visualization.viewer_template import generate_viewer_html
+from extraction.derived.crud_matrix import build_uc_entity_crud_index
 
 
 class MermaidRenderer:

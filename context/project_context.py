@@ -85,7 +85,7 @@ def build_context(repo_path: Path) -> ProjectContext:
     ctx.detected_stacks, ctx.manifest_snippets = _detect_tech_stacks(repo_path)
 
     # 3. フレームワーク知識を読み込む
-    from knowledge.loader import detect_and_load
+    from context.knowledge.loader import detect_and_load
     ctx.detected_frameworks, ctx.framework_knowledge = detect_and_load(ctx.manifest_snippets)
 
     # 4. ディレクトリ構造をスナップショット
