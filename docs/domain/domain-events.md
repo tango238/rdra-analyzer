@@ -38,7 +38,7 @@
 |---|---|---|---|
 | 実績シナリオが取り込まれた / `ActualScenarioIngested` | loop-e2e（PL→ACL） | `scenarioId, usecaseId?, steps[], frontendUrl, occurredOn` | 調停 |
 | 新規UCが実績から生成された / `UsecaseSynthesizedFromActual` | System | `ucId(UC-LE-NNN), loopE2eId, confidence=inferred, occurredOn` | Shared Kernel 書き戻し |
-| **棄却UCが実績で救済された** / `RejectedUsecaseRescued` 🎯 | System | `ucId, loopE2eId, occurredOn` | UC 再昇格（**#1 follow-on 未配線**） |
+| **棄却UCが実績で救済された** / `RejectedUsecaseRescued` 🎯 | System | `ucId, loopE2eId, occurredOn` | UC 再昇格（✅ reconcile に配線済・名前一致・derived） |
 | **コードと実績の矛盾が検出された** / `ConflictDetected` 🎯 | System: 矛盾を検出する | `ucId, kind, codeValue（真）, actualValue, occurredOn` | **矛盾 Audit** |
 
 **「コードを真」**: `ConflictDetected` は UC を変更しない。`codeValue` が真、`actualValue` は参考。要調査として矛盾 Audit へ追記のみ。

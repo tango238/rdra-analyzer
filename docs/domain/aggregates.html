@@ -48,7 +48,7 @@ footer{max-width:1000px;margin:0 auto;padding:20px 28px 60px;color:var(--muted);
 <hr>
 <h2 id="audit-aggregate">Audit Aggregate（追記専用・不変）</h2>
 <h3 id="rejectedusecase-bc">棄却ログ（RejectedUsecase） — BC ①</h3>
-<ul><li><strong>Root Entity</strong>: RejectedUsecase / <strong>ID</strong>: 元 UC の <code>UsecaseId</code></li><li><strong>構成要素</strong>: reason・missing_evidence（空アンカー名）</li><li><strong>不変条件</strong>: 追記専用・不変。「棄却＝破棄でなく記録」（検証フローの入力）。</li><li><strong>他 Aggregate 参照</strong>: 元 UC（id）。</li><li><strong>整合性</strong>: <code>UCが棄却された</code> イベントで結果整合的に追記。<strong>救済フロー</strong>（棄却＋loop-e2e 実績 → 再昇格）は未配線＝残課題。</li></ul>
+<ul><li><strong>Root Entity</strong>: RejectedUsecase / <strong>ID</strong>: 元 UC の <code>UsecaseId</code></li><li><strong>構成要素</strong>: reason・missing_evidence（空アンカー名）</li><li><strong>不変条件</strong>: 追記専用・不変。「棄却＝破棄でなく記録」（検証フローの入力）。</li><li><strong>他 Aggregate 参照</strong>: 元 UC（id）。</li><li><strong>整合性</strong>: <code>UCが棄却された</code> イベントで結果整合的に追記。<strong>救済フロー</strong>（棄却＋loop-e2e 実績 → 再昇格）は reconcile に配線済（名前一致で再昇格・confidence=derived・棄却ログから除去）。sync #1 follow-on。</li></ul>
 <h3 id="conflict-bc">矛盾（Conflict） — BC ② 実績調停</h3>
 <ul><li><strong>Root Entity</strong>: Conflict / <strong>ID</strong>: （usecase_id, kind）</li><li><strong>構成要素</strong>: kind∈{actor_mismatch, controller_mismatch}・<code>code_value</code>（コード=真）・<code>actual_value</code>（実績）・detail</li><li><strong>不変条件</strong>: 追記専用・不変。「コードを真」＝UC は変更しない（要調査フラグのみ）。</li><li><strong>他 Aggregate 参照</strong>: マッチした UC（id）。</li><li><strong>整合性</strong>: <code>矛盾が検出された</code> イベントで結果整合的に追記（Shared Kernel の書き戻しとは独立）。</li></ul>
 <hr>

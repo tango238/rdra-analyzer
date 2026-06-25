@@ -155,8 +155,16 @@
 
 - 確度の **可視化**（色分け・凡例）— #2/#3 実装後の④可視化拡張。
 - 棄却ログ・矛盾レポートの **PdM 向け提示 UI** — ④可視化拡張。
-- #5 業務フロー協働 BC は **Phase 5/9–11 を先に通す**（型・集約・ワークフロー設計）。
-- #7 構造リファクタは **#6 完了 ＋ Phase 4 mapping 確定**が前提。
+- ~~#5 業務フロー協働 BC~~ → ✅ 実装済み（sync #5）。
+- ~~救済フロー（#1 follow-on）~~ → ✅ 実装済み（reconcile が名前一致で再昇格）。
+- ~~loop-e2e 実送信~~ → ✅ **設計上の PL 成果物（`*.handoff.json`）で完了**。統合はファイルベース Published Language（inbound `pending.json` と対称）。ネットワーク呼出は BC 境界（loop-e2e へ委譲）を越えるため作らない。
+- **#7 構造リファクタ ＋ `Usecase`→`UseCase` 綴り統一** → **別 PR で対応**（破壊的・広範。前提の Phase 4 mapping/集約は確定済）。
+
+## 別 PR 予定（#7）
+
+- パッケージを BC 整合へ: `extraction/`（① 確定＋派生＋棄却）/ `reconciliation/`（② reconcile＋conflict）/ `workflow/`（③・実装済）/ `visualization/`（④）/ `shared/`（confidence＋scenario_builder）/ `llm/` / `context/`（project_context＋knowledge）。
+- `Usecase`→`UseCase` 綴り統一（コア型・広範な import 連鎖）。
+- いずれも破壊的＝承認ゲート＋段階移行（テスト緑を各段で確認）。
 
 ## 未解決の問い（承認時に決める方針分岐）
 

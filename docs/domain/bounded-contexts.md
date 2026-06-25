@@ -102,7 +102,7 @@
 | BC | 設計要素 | コード現状 | 状態 |
 |----|---------|-----------|------|
 | ① 要求モデル抽出 | コード証拠/トレーサビリティ | `EntityOperation.call_chain`, `*_evidence`, `code_references`, `Usecase.related_*` | ✅ 実装済み |
-| ① 確定層 | **Precision 棄却 ＋ 棄却ログ** | `rejection_log.py`：コード証拠なき UC を `partition_usecases` で棄却し `rejection_log.json` へ（独立 `RejectedUsecase` 型）。`analyze --strict` で opt-in（既定は現行 Recall 維持）。救済フローは未配線 | ✅ 実装済み（opt-in, sync #1）/ 🟡 救済は残 |
+| ① 確定層 | **Precision 棄却 ＋ 棄却ログ** | `rejection_log.py`：コード証拠なき UC を `partition_usecases` で棄却し `rejection_log.json` へ（独立 `RejectedUsecase` 型）。`analyze --strict` で opt-in（既定は現行 Recall 維持）。救済フローは reconcile に配線済み | ✅ 実装済み（opt-in, sync #1 ＋ 救済 follow-on） |
 | ① 派生層 | **確度ラベル** | `confidence` 三値（confirmed/derived/inferred）を `Usecase`/`EntityOperation` に導入。合成UCは inferred、静的抽出は confirmed。派生図への付与は可視化として後続 | ✅ 実装済み（sync #2） |
 | ① 派生層 | 情報モデル/状態遷移/BP/CRUDギャップ | 各ジェネレータ実装済み | ✅ 実装済み |
 | ① 派生層 | **システム境界の生成** | `rdra/system_boundary.py`：接点（画面）× 起点（エンドポイント）を決定的に Mermaid 出力（`rdra/system_boundary.md`）。LLM 不要＝確度 derived | ✅ 実装済み（sync #3） |

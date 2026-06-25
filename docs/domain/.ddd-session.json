@@ -4,11 +4,10 @@
   "lastUpdated": "2026-06-25",
   "analyzeApplied": ["contexts", "storming", "contexts-resync"],
   "openQuestions": [
-    "救済フロー: 静的棄却UC＋loop-e2e実績あり→再昇格の所有者は②(ACL内)か棄却ログ集約のメソッドか（sync #1 follow-on / Phase 9）",
     "抽出本体(usecase_extractor)でのコード証拠照合フィルタ（現状アンカーはLLM出力依存）（sync #1残）",
     "Shared Kernel(analysis_result.json)のスキーマ版管理者は①単独か共同か（Phase 6）",
     "④可視化はConformistでよいかOpen Host(ビューワーAPI)化の余地（将来）",
-    "業務フローAggregateの永続化形式と承認操作の置き場(CLI/ビューワー)（#5・Phase 9-11）"
+    "業務フローAggregateの永続化形式と承認操作の置き場(CLI/ビューワー)（#5・実装はJSONL+CLIで確定、ビューワーは将来）"
   ],
   "decisions": [
     "Core = RDRA要求モデル抽出（抽出の正確さが競争優位）",
@@ -51,7 +50,10 @@
     "types(Phase10)完了: docs/domain/code/にPython型骨格(Result/states/events/errors/ports/workflow)。py_compile通過。handOffはApprovedFlowのみで不正状態を表現不能",
     "sync #5完了: workflow/をTDD実装(ES+状態機械+guard+CLI)。28新規テスト・154 passed。コミットcf3ca09→ffb0e22→9ddf476→42958f0。モデル再整合済(67b3fde,84a17d9)",
     "glossary(Phase8)完了: BC別ユビキタス言語。多義語(確定/検証/ユースケース)とコード対応を記録。状態型名をworkflows.mdフィードバックから登録",
-    "残: #7構造リファクタ(deferred・破壊的=承認ゲート)、救済フロー#1 follow-on、Usecase vs UseCase綴り統一、loop-e2e実送信(現状artifact代替)"
+    "残: #7構造リファクタ(deferred・破壊的=承認ゲート)、救済フロー#1 follow-on、Usecase vs UseCase綴り統一、loop-e2e実送信(現状artifact代替)",
+    "救済フロー(#1 follow-on)完了: reconcileがrejection_log.jsonを読み名前一致で棄却UCを再昇格(id保持・confidence=derived・実績由来証拠付与・棄却ログから除去)。所有者は②ACL内。157 passed",
+    "loop-e2e実送信は設計上のPL成果物(*.handoff.json)で完了とみなす: 統合はファイルベースPublished Language(inbound pending.jsonと対称)。ネットワーク呼出はBC境界(loop-e2eへ委譲)を越えるため作らない",
+    "ユーザー指示(全部): 救済+loop-e2e送信は本PRで完了。#7構造リファクタ+Usecase綴り統一は別PRで対応(本PR完了後)"
   ],
   "divergences": [
     {

@@ -93,7 +93,7 @@
 - **「確定」には2種類ある**：UC/エンティティ＝コード証拠による自動確定／業務フロー＝PdM 承認による人間確定。確定者の違いがコンテキスト境界を示唆する。
 - **システム境界は新規生成ではなく既存照合の意味づけ**：`enrich` の画面↔エンドポイント突き合わせが、副産物としてシステム境界（アクターとシステムの接点）を描いている。
 - **テスト生成・実行はスコープ外**：このツールの責務は「業務フロー生成＋PdM 承認」まで。テスト作成・E2E 実行は loop-e2e。境界を越えないこと。
-- **棄却ログは破棄禁止**：Precision 重視で棄却するが、検証フロー（実績救済を含む）の入力として保持する。→ ✅ sync #1 で `rejection_log.json`（理由＋欠落証拠）として保持実装（`analyze --strict`）。🟡 実績救済による再昇格の配線は未実装（残課題）。
+- **棄却ログは破棄禁止**：Precision 重視で棄却するが、検証フロー（実績救済を含む）の入力として保持する。→ ✅ sync #1 で `rejection_log.json`（理由＋欠落証拠）として保持実装（`analyze --strict`）。✅ 実績救済による再昇格も配線済み（reconcile が名前一致で再昇格・sync #1 follow-on）。
 
 ## コードベース突き合わせ（`--analyze` / sync 後）
 
@@ -111,7 +111,7 @@
 | 10 | UCが棄却された→棄却ログ 🎯 | **#1** `partition_usecases`／`rejection_log.json`（`analyze --strict`） | ✅（sync #1, opt-in） |
 | 11 | 関連情報が再導出された（enrich） 🎯 | `enrich` cmd | ✅ |
 | 12 | 実績シナリオが取り込まれた | `reconcile` cmd | ✅ |
-| 13 | 棄却UCが実績で救済された 🎯 | `rejection_log` は書くのみ、reconcile は読まない | 🔴 未配線 |
+| 13 | 棄却UCが実績で救済された 🎯 | reconcile が `rejection_log.json` を読み、名前一致で棄却UCを再昇格（実績由来・derived）。棄却ログから除去 | ✅ 実装済み（sync #1 follow-on） |
 | 14 | 新規UCが実績から生成された | `_synthesize_usecase`（`confidence=inferred`） | ✅ |
 | 15 | コードと実績の矛盾が検出された 🎯 | **#4** `detect_conflicts`／`conflict_report.json` | ✅（sync #4） |
 | 16 | システム境界が特定された | **#3** `rdra/system_boundary.py`（`system_boundary.md`） | ✅（sync #3） |
