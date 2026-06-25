@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bounded Contexts</title><style>:root{--bg:#0f172a;--card:#1e293b;--line:#334155;--txt:#e2e8f0;--muted:#94a3b8;--accent:#7dd3fc}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--txt);font-family:-apple-system,'Hiragino Kaku Gothic ProN','Segoe UI',sans-serif;line-height:1.75}
+nav.top{position:sticky;top:0;z-index:10;background:#0b1220;border-bottom:1px solid var(--line);padding:10px 24px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+nav.top .brand{font-weight:700;font-size:14px;margin-right:12px;color:#fff}
+nav.top a{color:var(--muted);text-decoration:none;font-size:13px;padding:5px 11px;border-radius:7px;white-space:nowrap}
+nav.top a:hover{background:#172033;color:var(--txt)}
+nav.top a.active{background:#334155;color:#fff;font-weight:600}
+main{max-width:1000px;margin:0 auto;padding:32px 28px 96px}
+main img{max-width:100%;height:auto;border-radius:12px;border:1px solid var(--line);display:block;margin:18px auto}
+h1{font-size:26px;border-bottom:2px solid var(--line);padding-bottom:12px;margin-top:8px}
+h2{font-size:20px;border-bottom:1px solid var(--line);padding-bottom:7px;margin-top:38px}
+h3{font-size:16px;margin-top:28px;color:#cbd5e1}h4{font-size:14px;margin-top:20px;color:#cbd5e1}
+a{color:var(--accent)}p,li{font-size:14.5px}
+code{background:#0b1220;padding:2px 7px;border-radius:5px;font-size:13px;font-family:ui-monospace,Menlo,monospace}
+pre{background:#0b1220;border:1px solid var(--line);border-radius:10px;padding:16px;overflow:auto;font-size:12.5px;line-height:1.55}
+pre code{background:none;padding:0}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:13px}
+th,td{border:1px solid var(--line);padding:8px 11px;text-align:left;vertical-align:top}
+th{background:var(--card);font-weight:600}tr:nth-child(even) td{background:#172033}
+blockquote{border-left:4px solid #475569;margin:16px 0;padding:4px 18px;color:var(--muted);background:#131c2e;border-radius:0 8px 8px 0}
+hr{border:none;border-top:1px solid var(--line);margin:32px 0}
+ul,ol{padding-left:24px}li{margin:4px 0}strong{color:#f1f5f9}
+footer{max-width:1000px;margin:0 auto;padding:20px 28px 60px;color:var(--muted);font-size:12px;border-top:1px solid var(--line)}
+</style></head><body>
+<nav class="top"><span class="brand">rdra-analyzer ドメインモデル</span><a href="discovery.html">ディスカバリ</a><a href="event-storming.html">イベントストーミング</a><a href="bounded-contexts.html" class="active">境界づけられたコンテキスト</a><a href="context-map.html">コンテキストマップ</a><a href="aggregates.html">集約</a><a href="domain-events.html">ドメインイベント</a><a href="glossary.html">ユビキタス言語</a><a href="workflows.html">ワークフロー</a><a href="sync.html">モデル⇔実装 Sync</a></nav>
+<main>
+<h1 id="bounded-contexts">Bounded Contexts</h1>
+<blockquote>Phase 3 / DDD — rdra-analyzer 自身のドメイン。<a href="discovery.html">discovery.md</a> / <a href="event-storming.html">event-storming.md</a> を踏まえる。</blockquote>
+<h2 id="context-map">Context Map 概要図</h2>
+<pre><code>                          ┌──────────────────────────────────────────────┐
+                          │ ① 要求モデル抽出コンテキスト        ★Core      │
+                          │                                              │
+   [対象リポジトリ] ─────▶│  [確定層] UC・エンティティ                     │
+   (ソースコード)         │          コード証拠で確定（高確度）            │
+                          │            │ 確定物を入力に                   │
+                          │  [派生層] 情報モデル/状態遷移/BP/              │
+                          │          システム境界/CRUDギャップ            │
+                          │          合成・推論（確度ラベル付き）          │
+                          └───┬──────────────┬───────────────┬───────────┘
+                              │確定UC/エンティティ            │確定物
+            実績で救済/矛盾検出│              │確定UC          ▼
+                              ▼              ▼        ┌──────────────────┐
+   [loop-e2e]──実績──▶┌──────────────┐ ┌──────────────┐│ ④ 可視化          │
+   (外部システム)      │ ② 実績調停    │ │ ③ 業務フロー  ││   Supporting      │
+                      │   Supporting  │ │   協働        ││  Mermaid/viewer   │
+                      │   (ACL)       │ │   Supporting  │└──────────────────┘
+                      │ 「コードを真」 │ │ PdM承認ループ │
+                      └──────────────┘ └──────┬───────┘
+                                              │承認済み業務フロー
+                                              ▼
+                                         [loop-e2e へ引き渡し]</code></pre>
+<h2 id="bounded-context">Bounded Context 一覧</h2>
+<h3 id="core">① 要求モデル抽出コンテキスト (Core)</h3>
+<ul><li><strong>責務</strong>: 対象コードから RDRA 要求モデルを <strong>コード証拠ベースで正確に起こす</strong>。Core Domain。</li><li><strong>内部2層</strong>:<ul><li><strong>確定層</strong> — ユースケース・エンティティ。コード証拠と一対一で確定（高確度・確度ラベル不要）。最小コア抽出物。</li><li><strong>派生層</strong> — 情報モデル（リレーション）／状態遷移／ビジネスポリシー／システム境界／CRUDギャップ。確定層を入力に合成・推論（<strong>確度ラベル必須</strong>）。</li></ul></li><li><strong>不変条件</strong>: 両層とも「抽出要素 → コード証拠」の対応が必須。根拠なきものは確定モデルに出さず棄却（→ 棄却ログ）。</li><li><strong>主要概念</strong>: APIエンドポイント, エンティティ, ユースケース, 棄却ログ, 情報モデル, 状態遷移, ビジネスポリシー, システム境界, CRUDギャップ, 解析セッション</li><li><strong>ユビキタス言語</strong>: 抽出 / 照合 / 証拠 / 確定（＝コード証拠で裏付け）/ 棄却 / 確度ラベル / 確定層 / 派生層 / 接点（画面）/ 起点（エンドポイント）</li><li><strong>所有チーム</strong>: TBD</li></ul>
+<h3 id="supporting-acl">② 実績調停コンテキスト (Supporting / ACL)</h3>
+<ul><li><strong>責務</strong>: loop-e2e の実績シナリオを取り込み、要求モデルへ突き合わせる。外部システムとの境界（腐敗防止層）。</li><li><strong>調停ルール</strong>（<a href="discovery.html">discovery.md</a> のコア判断基準）:<ul><li>静的で確定 → そのまま確定</li><li>静的で棄却 ＋ 実績あり → <strong>救済</strong>（「実績由来」確定）</li><li>静的に無い ＋ 実績のみ → 新規UC（<code>UC-LE-NNN</code>）</li><li>静的で確定 ＋ 実績と矛盾 → <strong>コードを真</strong>・要調査フラグ</li></ul></li><li><strong>主要概念</strong>: 実績シナリオ, 救済, 矛盾検出, 要調査フラグ, <strong>矛盾（<code>Conflict</code> 型・sync #4 で実装）</strong></li><li><strong>ユビキタス言語</strong>: 実績 / 救済 / 矛盾 / 調停 / 実績由来。<strong>「確定」は抽出 BC と意味が連続するが、出自が「コード」でなく「実績」である点が異なる</strong></li><li><strong>所有チーム</strong>: TBD</li></ul>
+<h3 id="supporting">③ 業務フロー協働コンテキスト (Supporting)</h3>
+<ul><li><strong>責務</strong>: 確定 UC 群から業務フローを想定し、PdM の承認を経て確定。承認済みを loop-e2e へ引き渡す。</li><li><strong>承認ループ</strong>: 想定（自動）→ レビュー（PdM）→ FB（PdM）→ 再想定（自動）→ 微調整（PdM 手動）→ 承認（PdM）</li><li><strong>責務の境界</strong>: 生成＋PdM 承認まで。<strong>テスト作成・E2E 実行は loop-e2e（スコープ外）</strong>。</li><li><strong>主要概念</strong>: 業務フロー, 承認, フィードバック, 引き渡し</li><li><strong>ユビキタス言語</strong>: 業務フロー / 想定 / レビュー / 承認（＝<strong>PdM が確定</strong>）/ 微調整 / 引き渡し</li><li><strong>所有チーム</strong>: TBD</li></ul>
+<h3 id="supporting">④ 可視化コンテキスト (Supporting)</h3>
+<ul><li><strong>責務</strong>: 抽出・合成された RDRA モデルを Mermaid 図・インタラクティブビューワーで PdM に見せる。説明の器。</li><li><strong>主要概念</strong>: Mermaid 図, ビューワー, クロスリファレンス, コード参照箇所</li><li><strong>ユビキタス言語</strong>: ER図 / 複合図 / パネル / ズーム・パン / クロスリファレンス</li><li><strong>所有チーム</strong>: TBD</li></ul>
+<h3 id="generic-subdomains">Generic Subdomains</h3>
+<ul><li><strong>LLM プロバイダ抽象</strong> (Generic): Anthropic API / Claude Code CLI。代替可能な汎用基盤。</li><li><strong>プロジェクトコンテキスト構築</strong> (Generic): CLAUDE.md/AGENTS.md/マニフェスト読込。汎用前処理。</li></ul>
+<h2 id="">サブドメイン分類まとめ</h2>
+<table><thead><tr><th>Bounded Context</th><th>サブドメイン種別</th><th>1 BC = 1 Subdomain</th></tr></thead><tbody><tr><td>要求モデル抽出</td><td><strong>Core</strong></td><td>✅（確定層＋派生層を1つの Core に統合）</td></tr><tr><td>実績調停</td><td>Supporting (ACL)</td><td>✅</td></tr><tr><td>業務フロー協働</td><td>Supporting</td><td>✅</td></tr><tr><td>可視化</td><td>Supporting</td><td>✅</td></tr><tr><td>LLM プロバイダ抽象</td><td>Generic</td><td>✅</td></tr><tr><td>プロジェクトコンテキスト構築</td><td>Generic</td><td>✅</td></tr></tbody></table>
+<h2 id="">言語の境界で発見した事実</h2>
+<ul><li><strong>「確定」</strong>は文脈で確定者が変わる：抽出 BC ＝ <strong>コード証拠</strong>で裏付け（自動・System）／業務フロー協働 BC ＝ <strong>PdM が承認</strong>（人間）。→ 別コンテキスト。</li><li><strong>「検証」</strong>：抽出 BC ＝「コード証拠と照合」／loop-e2e 側＝「E2E 実行検証」（スコープ外）。境界の外と明確に区別する。</li><li><strong>「ユースケース」</strong>：抽出 BC ＝コード由来の検証済み UC／実績調停 BC ＝実績由来 UC（<code>UC-LE</code>、コードに無い）。出自が異なる。</li></ul>
+<h2 id="analyze">コードベース突き合わせ（<code>--analyze</code>）</h2>
+<blockquote>このモデルは <strong>as-built（現状）ではなく to-be（目標）</strong>。Core の柱の一部はまだコードに無い＝これから作る差別化。<br>Precision/棄却ログは <strong>目標として維持</strong>（コードを今後作り変える北極星）。</blockquote>
+<h3 id="bc">各 BC の実装状況</h3>
+<table><thead><tr><th>BC</th><th>設計要素</th><th>コード現状</th><th>状態</th></tr></thead><tbody><tr><td>① 要求モデル抽出</td><td>コード証拠/トレーサビリティ</td><td><code>EntityOperation.call_chain</code>, <code>*_evidence</code>, <code>code_references</code>, <code>Usecase.related_*</code></td><td>✅ 実装済み</td></tr><tr><td>① 確定層</td><td><strong>Precision 棄却 ＋ 棄却ログ</strong></td><td><code>rejection_log.py</code>：コード証拠なき UC を <code>partition_usecases</code> で棄却し <code>rejection_log.json</code> へ（独立 <code>RejectedUsecase</code> 型）。<code>analyze --strict</code> で opt-in（既定は現行 Recall 維持）。救済フローは未配線</td><td>✅ 実装済み（opt-in, sync #1）/ 🟡 救済は残</td></tr><tr><td>① 派生層</td><td><strong>確度ラベル</strong></td><td><code>confidence</code> 三値（confirmed/derived/inferred）を <code>Usecase</code>/<code>EntityOperation</code> に導入。合成UCは inferred、静的抽出は confirmed。派生図への付与は可視化として後続</td><td>✅ 実装済み（sync #2）</td></tr><tr><td>① 派生層</td><td>情報モデル/状態遷移/BP/CRUDギャップ</td><td>各ジェネレータ実装済み</td><td>✅ 実装済み</td></tr><tr><td>① 派生層</td><td><strong>システム境界の生成</strong></td><td><code>rdra/system_boundary.py</code>：接点（画面）× 起点（エンドポイント）を決定的に Mermaid 出力（<code>rdra/system_boundary.md</code>）。LLM 不要＝確度 derived</td><td>✅ 実装済み（sync #3）</td></tr><tr><td>② 実績調停</td><td>「コードを真」の調停</td><td><code>reconcile.py</code>: route match → checkpoint 事実確認 → synthesize。コードが勝つ</td><td>✅ 実装済み（部分）</td></tr><tr><td>② 実績調停</td><td><strong>矛盾検出 ＋ 要調査フラグ</strong></td><td><code>conflict_report.py</code>＋<code>detect_conflicts</code>：マッチ UC と実績の actor/controller 不一致を <code>conflict_report.json</code> へ（コードを真・UC 不変）</td><td>✅ 実装済み（sync #4）</td></tr><tr><td>③ 業務フロー協働</td><td><strong>PdM 承認ループ</strong></td><td><code>workflow/</code> に実装（ES＋状態機械＋guard＋<code>rdra flow</code> CLI）。PdM のみ承認・承認後のみ loop-e2e 引き渡し（PL 成果物）</td><td>✅ 実装済み（sync #5）</td></tr><tr><td>④ 可視化</td><td>Mermaid / ビューワー</td><td><code>viewer_template.py</code>, <code>mermaid_renderer.py</code></td><td>✅ 実装済み</td></tr></tbody></table>
+<h3 id="bc-sync-contexts-analyze">BC ↔ コードモジュール対応（sync 後 / contexts --analyze）</h3>
+<blockquote>6 BC はすべてコードに存在し概念構造は健全。ただし<strong>パッケージは技術レイヤで切られ BC を横断</strong>する。</blockquote>
+<table><thead><tr><th>BC</th><th>コードモジュール</th></tr></thead><tbody><tr><td>① 確定層</td><td><code>analyzer/</code>: <code>usecase_extractor</code>・<code>source_parser</code>・<code>screen_analyzer</code></td></tr><tr><td>① 派生層</td><td><code>rdra/</code>: <code>information_model</code>・<code>state_transition</code>・<code>business_policy</code>・<code>crud_matrix</code>・<code>system_boundary</code>(#3) ＋ <code>gap/crud_analyzer</code></td></tr><tr><td>① Precision/棄却</td><td><code>analyzer/rejection_log</code>(#1)</td></tr><tr><td>① 確度（横断 kernel）</td><td><code>confidence.py</code>（top-level, #2）</td></tr><tr><td>② 実績調停（ACL）</td><td><code>analyzer/</code>: <code>reconcile</code>・<code>conflict_report</code>(#4)・<code>scenario_builder</code>(共有型)</td></tr><tr><td>③ 業務フロー協働</td><td><code>rdra/activity_diagram</code>（一方向のみ・承認ループ無し）</td></tr><tr><td>④ 可視化</td><td><code>rdra/</code>: <code>mermaid_renderer</code>・<code>viewer_template</code>・<code>usecase_diagram</code></td></tr><tr><td>LLM 抽象（Generic）</td><td><code>llm/</code></td></tr><tr><td>プロジェクトコンテキスト構築（Generic）</td><td><code>analyzer/project_context</code>・<code>knowledge/loader</code></td></tr></tbody></table>
+<p><strong>🔴 構造ズレ（#7 を定量化）</strong>: <code>analyzer/</code> が <strong>3 BC</strong>（①確定層・②実績調停・Generic）にまたがり、<code>rdra/</code> も <strong>3 BC</strong>（①派生層・③業務フロー・④可視化）にまたがる。<code>gap/</code> は ①派生層の生成器1個だけが孤立。sync 新規モジュールも技術レイヤ慣習に従い #7 を強化したが、<code>confidence.py</code>（top-level 共有 kernel）と <code>conflict_report</code>→<code>analyzer/</code>（②に正しく同居）は妥当配置。<strong><code>scenario_builder</code> の <code>OperationScenario</code> 型は ①/②/④ が横断利用＝<code>confidence</code> と並ぶ Shared Kernel 候補</strong>。</p>
+<h3 id="">設計が切ったのにコードに残るもの（要撤去・整理）</h3>
+<ul><li><del><code>scenarios</code> / <code>verify</code> / <code>e2e</code> コマンドが main.py に残存</del> → ✅ <strong>sync #6 で撤去</strong>（コマンド＋<code>scenario_verifier</code>/<code>e2e/</code>/playwright を削除、<code>all</code> を再配線）。<code>scenario_builder</code> は analyze/rdra/gap/reconcile が依存する共有型のため存置。</li><li>コード実体の継ぎ目は <strong>Source / UseCase / Scenario / Reconciliation</strong> の4分割で、設計の継ぎ目とズレている。→ 🟡 Scenario context は <code>scenario_builder</code> 型のみへ縮小（#6）。残る 4 BC への横断リファクタ（#7）は <strong>Phase 4 mapping の関係種別確定が前提</strong>で deferred。BC 整合の目標構成: <code>extraction/</code>・<code>reconciliation/</code>・<code>workflow/</code>・<code>visualization/</code>・<code>shared/</code>（confidence+scenario_builder）・<code>llm/</code>・<code>context/</code>。</li></ul>
+<h3 id="analyze-sync"><code>--analyze</code> から導かれる作業の北極星（sync 進捗）</h3>
+<ol><li>✅ <strong>棄却ログ ＋ Precision 棄却</strong>（sync #1, opt-in <code>--strict</code>）</li><li>✅ 派生層への<strong>確度ラベル</strong>（sync #2, 三値）</li><li>🔴 <strong>業務フロー協働 BC</strong>（PdM 承認ループ）— sync #5 deferred（Phase 5/9–11 が前提）</li><li>✅ <strong>システム境界</strong>（sync #3）・<strong>矛盾検出/要調査フラグ</strong>（sync #4）</li><li>✅ スコープ外（scenarios/verify/e2e）の撤去（sync #6）</li></ol>
+<h2 id="">未解決の問い</h2>
+<ul><li><del>「棄却ログ」は独立 Aggregate か、ユースケースの状態（rejected）か</del> → ✅ sync #1 で<strong>独立型 <code>RejectedUsecase</code></strong> に確定（Phase 5 で Aggregate 化を最終判断）。</li><li>システム境界 Aggregate と画面・エンドポイントの所有関係（Phase 5）。</li><li><del>BC 間の関係種別（Partnership / Customer-Supplier / ACL / Published Language 等）の確定。特に loop-e2e との上流/下流関係</del> → ✅ <strong>Phase 4 mapping で確定</strong>（<a href="context-map.html">context-map.md</a>）。loop-e2e は双方向別契約（②へ実績 PL／③から承認済みフロー PL）、①⇔②は Shared Kernel。</li><li><del>確度ラベルの値域</del> → ✅ sync #2 で<strong>三値（confirmed/derived/inferred）</strong>に確定。</li><li>新概念 <code>Conflict</code>（sync #4）を独立 Aggregate 化するか（Phase 5）。</li></ul>
+</main>
+<footer>rdra-analyzer ドメインモデル &nbsp;|&nbsp; source: <code>docs/domain/bounded-contexts.md</code> &nbsp;|&nbsp; generated by /ddd publish</footer>
+</body></html>

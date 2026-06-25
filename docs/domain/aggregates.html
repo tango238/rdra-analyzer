@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aggregates</title><style>:root{--bg:#0f172a;--card:#1e293b;--line:#334155;--txt:#e2e8f0;--muted:#94a3b8;--accent:#7dd3fc}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--txt);font-family:-apple-system,'Hiragino Kaku Gothic ProN','Segoe UI',sans-serif;line-height:1.75}
+nav.top{position:sticky;top:0;z-index:10;background:#0b1220;border-bottom:1px solid var(--line);padding:10px 24px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+nav.top .brand{font-weight:700;font-size:14px;margin-right:12px;color:#fff}
+nav.top a{color:var(--muted);text-decoration:none;font-size:13px;padding:5px 11px;border-radius:7px;white-space:nowrap}
+nav.top a:hover{background:#172033;color:var(--txt)}
+nav.top a.active{background:#334155;color:#fff;font-weight:600}
+main{max-width:1000px;margin:0 auto;padding:32px 28px 96px}
+main img{max-width:100%;height:auto;border-radius:12px;border:1px solid var(--line);display:block;margin:18px auto}
+h1{font-size:26px;border-bottom:2px solid var(--line);padding-bottom:12px;margin-top:8px}
+h2{font-size:20px;border-bottom:1px solid var(--line);padding-bottom:7px;margin-top:38px}
+h3{font-size:16px;margin-top:28px;color:#cbd5e1}h4{font-size:14px;margin-top:20px;color:#cbd5e1}
+a{color:var(--accent)}p,li{font-size:14.5px}
+code{background:#0b1220;padding:2px 7px;border-radius:5px;font-size:13px;font-family:ui-monospace,Menlo,monospace}
+pre{background:#0b1220;border:1px solid var(--line);border-radius:10px;padding:16px;overflow:auto;font-size:12.5px;line-height:1.55}
+pre code{background:none;padding:0}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:13px}
+th,td{border:1px solid var(--line);padding:8px 11px;text-align:left;vertical-align:top}
+th{background:var(--card);font-weight:600}tr:nth-child(even) td{background:#172033}
+blockquote{border-left:4px solid #475569;margin:16px 0;padding:4px 18px;color:var(--muted);background:#131c2e;border-radius:0 8px 8px 0}
+hr{border:none;border-top:1px solid var(--line);margin:32px 0}
+ul,ol{padding-left:24px}li{margin:4px 0}strong{color:#f1f5f9}
+footer{max-width:1000px;margin:0 auto;padding:20px 28px 60px;color:var(--muted);font-size:12px;border-top:1px solid var(--line)}
+</style></head><body>
+<nav class="top"><span class="brand">rdra-analyzer ドメインモデル</span><a href="discovery.html">ディスカバリ</a><a href="event-storming.html">イベントストーミング</a><a href="bounded-contexts.html">境界づけられたコンテキスト</a><a href="context-map.html">コンテキストマップ</a><a href="aggregates.html" class="active">集約</a><a href="domain-events.html">ドメインイベント</a><a href="glossary.html">ユビキタス言語</a><a href="workflows.html">ワークフロー</a><a href="sync.html">モデル⇔実装 Sync</a></nav>
+<main>
+<h1 id="aggregates">Aggregates</h1>
+<blockquote>Phase 5 / DDD — rdra-analyzer の集約設計。4つのルール（不変条件を境界内で保護 / 小さく / 他集約は id 参照 / 結果整合）に基づく。<br><a href="bounded-contexts.html">bounded-contexts.md</a> の 6 BC、<a href="context-map.html">context-map.md</a> の Shared Kernel / PL / ACL を踏まえる。</blockquote>
+<h2 id="right-sizing">仕分けの結論（Right-Sizing）</h2>
+<table><thead><tr><th>種別</th><th>要素</th><th>理由</th></tr></thead><tbody><tr><td><strong>振る舞い Aggregate</strong></td><td>ユースケース・エンティティ・実績シナリオ・業務フロー・解析セッション</td><td>不変条件＋操作を持つ整合境界</td></tr><tr><td><strong>Audit Aggregate</strong>（追記専用・不変）</td><td>棄却ログ（<code>RejectedUsecase</code>）・矛盾（<code>Conflict</code>）</td><td>UC を id 参照する記録。BC・ライフサイクルが UC と異なるため分離</td></tr><tr><td><strong>Projection / Read Model</strong>（集約でない）</td><td>システム境界・情報モデル・状態遷移・ビジネスポリシー・CRUDギャップ</td><td>確定層から決定的に導出。不変条件なし・再生成可能・確度=derived・所有者なし</td></tr><tr><td><strong>Value Object</strong></td><td>確度（<code>Confidence</code>）・APIエンドポイント・画面</td><td>属性を表す不変オブジェクト。UC が id 参照</td></tr></tbody></table>
+<blockquote><strong>Rule 3 はコードで既達</strong>: <code>Usecase.related_routes/_controllers/_entities/_views/_pages</code> は全て文字列 ID 参照（オブジェクト参照でない）。</blockquote>
+<hr>
+<h2 id="aggregate">振る舞い Aggregate</h2>
+<h3 id="usecase-bc-core">ユースケース（UseCase） — BC ① 要求モデル抽出 ★Core</h3>
+<ul><li><strong>Root Entity</strong>: UseCase / <strong>ID</strong>: <code>UsecaseId</code>（<code>UC-001</code> / <code>UC-LE-001</code>）</li><li><strong>構成要素</strong>: <code>Confidence</code>(VO)・related_*（他集約への ID 参照リスト）・preconditions/postconditions(VO)</li><li><strong>ビジネス不変条件</strong>:<ul><li><strong>確定 UC ⇔ コード証拠アンカー（route/controller/entity/page）が1つ以上存在</strong>（#1 を集約ルール化）。違反 → 確定モデルに出さず棄却ログへ移送。</li><li><code>confidence ∈ {confirmed, derived, inferred}</code>。コード証拠 1:1 = confirmed、合成（loop-e2e 由来）= inferred。</li></ul></li><li><strong>操作</strong>: <code>確定する()</code> → <code>UCが確定された</code> / <code>棄却する(理由, 欠落証拠)</code> → <code>UCが棄却された</code>（棄却ログへ）/ <code>関連を再導出する()</code>（enrich・決定的）→ <code>関連が再導出された</code></li><li><strong>他 Aggregate 参照</strong>: APIエンドポイント・エンティティ・画面（id のみ）</li><li><strong>整合性</strong>: 即時=自身の related_*/confidence。結果整合=Projection 群（確定変更を Domain Event で再生成）・棄却ログ（イベントで追記）</li></ul>
+<h3 id="entity-bc">エンティティ（Entity） — BC ①</h3>
+<ul><li><strong>Root Entity</strong>: Entity / <strong>ID</strong>: <code>EntityClass</code>（クラス名）</li><li><strong>構成要素</strong>: <code>EntityOperation</code>（CRUD 操作・<code>Confidence</code> 付き・call_chain）</li><li><strong>ビジネス不変条件</strong>: 各 operation は当エンティティへの操作（entity_class 一致）。operation は静的抽出由来＝confidence=confirmed。</li><li><strong>操作</strong>: <code>操作を付与する(EntityOperation)</code></li><li><strong>整合性</strong>: CRUD 完全性の判定は <strong>Projection（CRUDギャップ）</strong> が担う（集約内では持たない）。</li></ul>
+<h3 id="operationscenario-bc">実績シナリオ（OperationScenario） — BC ② 実績調停</h3>
+<ul><li><strong>Root Entity</strong>: OperationScenario / <strong>ID</strong>: <code>ScenarioId</code>（<code>LE-...</code>）</li><li><strong>構成要素</strong>: <code>OperationStep</code>（順序付きステップ）・frontend_url・api_endpoint</li><li><strong>ビジネス不変条件</strong>: ステップは step_no 昇順。<code>usecase_id</code> で UC を参照。LE- は loop-e2e 所有＝冪等に扱う。</li><li><strong>整合性</strong>: ACL（<code>normalize_route</code>）で外部 PL（pending.json）から翻訳して構築。</li></ul>
+<h3 id="businessflow-bc-5">業務フロー（BusinessFlow） — BC ③ 業務フロー協働 〔#5 未実装〕</h3>
+<ul><li><strong>Root Entity</strong>: BusinessFlow / <strong>ID</strong>: <code>BusinessFlowId</code></li><li><strong>構成要素</strong>: 想定フロー（確定 UC 群の連なり・id 参照）・承認状態・フィードバック履歴</li><li><strong>ビジネス不変条件（状態機械）</strong>: <code>想定 → レビュー → FB → 再想定 → 編集 → 承認 → 引き渡し</code>。<ul><li><strong>承認は PdM のみ</strong>（System は想定/再想定まで）。<strong>引き渡しは承認後のみ</strong>。</li></ul></li><li><strong>操作</strong>: <code>想定する()</code>→<code>想定された</code> / <code>レビューする()</code> / <code>フィードバックする()</code>→<code>再想定へ</code> / <code>承認する(PdM)</code>→<code>承認された</code> / <code>引き渡す()</code>→<code>loop-e2e へ引き渡された</code>(PL)</li><li><strong>他 Aggregate 参照</strong>: 確定 UC（id のみ）</li><li><strong>整合性</strong>: 即時=自身の状態遷移。結果整合=loop-e2e への引き渡し（PL）。</li></ul>
+<h3 id="analysissession-bc">解析セッション（AnalysisSession） — BC ①（横断・進行管理）</h3>
+<ul><li><strong>Root Entity</strong>: AnalysisSession / <strong>ID</strong>: 出力ディレクトリ＋checkpoint</li><li><strong>構成要素</strong>: <code>phase</code>（parse→extract→done）・<code>completed_repos</code>・生成した参照事実（routes/pages/models/entity_operations）</li><li><strong>ビジネス不変条件</strong>: phase は単調進行。completed_repos は単調増加（再開可能＝冪等）。</li><li><strong>役割</strong>: 解析の進行を束ねる Process（Saga 的）。参照 VO（APIエンドポイント・画面）と エンティティを産出する。</li><li><strong>整合性</strong>: checkpoint への中間保存で再開可能性を担保。</li></ul>
+<hr>
+<h2 id="audit-aggregate">Audit Aggregate（追記専用・不変）</h2>
+<h3 id="rejectedusecase-bc">棄却ログ（RejectedUsecase） — BC ①</h3>
+<ul><li><strong>Root Entity</strong>: RejectedUsecase / <strong>ID</strong>: 元 UC の <code>UsecaseId</code></li><li><strong>構成要素</strong>: reason・missing_evidence（空アンカー名）</li><li><strong>不変条件</strong>: 追記専用・不変。「棄却＝破棄でなく記録」（検証フローの入力）。</li><li><strong>他 Aggregate 参照</strong>: 元 UC（id）。</li><li><strong>整合性</strong>: <code>UCが棄却された</code> イベントで結果整合的に追記。<strong>救済フロー</strong>（棄却＋loop-e2e 実績 → 再昇格）は未配線＝残課題。</li></ul>
+<h3 id="conflict-bc">矛盾（Conflict） — BC ② 実績調停</h3>
+<ul><li><strong>Root Entity</strong>: Conflict / <strong>ID</strong>: （usecase_id, kind）</li><li><strong>構成要素</strong>: kind∈{actor_mismatch, controller_mismatch}・<code>code_value</code>（コード=真）・<code>actual_value</code>（実績）・detail</li><li><strong>不変条件</strong>: 追記専用・不変。「コードを真」＝UC は変更しない（要調査フラグのみ）。</li><li><strong>他 Aggregate 参照</strong>: マッチした UC（id）。</li><li><strong>整合性</strong>: <code>矛盾が検出された</code> イベントで結果整合的に追記（Shared Kernel の書き戻しとは独立）。</li></ul>
+<hr>
+<h2 id="projection-read-model">Projection / Read Model（集約でない）</h2>
+<p>確定層（UseCase / Entity）から<strong>決定的に導出</strong>される派生投影。不変条件を持たず、いつでも再生成可能。確度=<code>derived</code>。所有者なし（UC を id 参照）。</p>
+<table><thead><tr><th>Projection</th><th>由来</th><th>コード</th></tr></thead><tbody><tr><td>システム境界</td><td>接点（画面）× 起点（エンドポイント）</td><td><code>rdra/system_boundary.py</code>（#3）</td></tr><tr><td>情報モデル</td><td>エンティティ＋リレーション</td><td><code>rdra/information_model.py</code></td></tr><tr><td>状態遷移</td><td>エンティティの状態</td><td><code>rdra/state_transition.py</code></td></tr><tr><td>ビジネスポリシー</td><td>UC/コード</td><td><code>rdra/business_policy.py</code></td></tr><tr><td>CRUDギャップ</td><td>エンティティ × 操作</td><td><code>gap/crud_analyzer.py</code></td></tr></tbody></table>
+<p>→ openQuestion「システム境界 Aggregate と所有関係」は <strong>「Aggregate ではなく Projection（所有者なし・UC を id 参照）」</strong> で解消。</p>
+<h2 id="value-object">Value Object</h2>
+<ul><li><strong>確度（Confidence）</strong>: <code>confirmed | derived | inferred</code>。Shared Kernel（①↔②）。<code>confidence.py</code>。</li><li><strong>APIエンドポイント（ApiEndpoint）</strong>: method＋path。解析セッションが産出する確定事実。UC が id 参照。</li><li><strong>画面（Screen）</strong>: route_path＋component。同上。</li></ul>
+<hr>
+<h2 id="rule-4">整合性まとめ（Rule 4: 結果整合）</h2>
+<table><thead><tr><th>トリガー（Domain Event）</th><th>即時整合（同一集約）</th><th>結果整合（別集約・イベント経由）</th></tr></thead><tbody><tr><td>UCが確定された</td><td>UseCase.confidence/related_*</td><td>Projection 群を再生成</td></tr><tr><td>UCが棄却された</td><td>—</td><td>棄却ログ（Audit）へ追記</td></tr><tr><td>実績が取り込まれた</td><td>OperationScenario 構築（ACL）</td><td>Shared Kernel（analysis_result.json）へ救済/新規UC書き戻し</td></tr><tr><td>矛盾が検出された</td><td>—</td><td>矛盾（Audit）へ追記。UC は不変（コードを真）</td></tr><tr><td>業務フローが承認された</td><td>BusinessFlow.状態</td><td>loop-e2e へ引き渡し（PL）</td></tr></tbody></table>
+<blockquote>1トランザクション＝1集約変更。Projection・Audit・loop-e2e はすべて Domain Event 経由の結果整合。</blockquote>
+<h2 id="anemic-domain-model-analyze">Anemic Domain Model チェック（--analyze 観点）</h2>
+<ul><li><strong>現状コードは関数型スタイル</strong>: <code>partition_usecases</code>（#1）・<code>detect_conflicts</code>（#4）・各ジェネレータは dataclass に対する<strong>モジュール関数</strong>で、集約メソッドではない。</li><li><strong>判定</strong>: 純粋な Anemic 違反ではなく、<strong>DMMF 的な関数型設計</strong>（データ＝dataclass、振る舞い＝純粋関数）。Phase 9–11（型駆動）の方針と整合するため、無理にメソッド化しない。</li><li><strong>ただし不変条件の所在は明示すべき</strong>: UC の「確定⇔証拠あり」、BusinessFlow の状態機械は、Phase 10 で Smart Constructor / 型で「不正状態を表現不能」にするのが目標。</li></ul>
+<h2 id="">未解決の問い</h2>
+<ul><li>救済フロー（棄却ログ ＋ loop-e2e 実績 → 再昇格）の所有者は ②（ACL 内）か、棄却ログ集約のメソッドか（#1 follow-on / Phase 9）。</li><li>Shared Kernel <code>analysis_result.json</code> のスキーマ版管理者（① 単独か共同か）（Phase 6）。</li><li>業務フロー Aggregate の永続化形式と承認操作の置き場（CLI / ビューワー）（#5・Phase 9–11）。</li></ul>
+</main>
+<footer>rdra-analyzer ドメインモデル &nbsp;|&nbsp; source: <code>docs/domain/aggregates.md</code> &nbsp;|&nbsp; generated by /ddd publish</footer>
+</body></html>

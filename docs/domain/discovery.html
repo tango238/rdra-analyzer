@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Discovery</title><style>:root{--bg:#0f172a;--card:#1e293b;--line:#334155;--txt:#e2e8f0;--muted:#94a3b8;--accent:#7dd3fc}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--txt);font-family:-apple-system,'Hiragino Kaku Gothic ProN','Segoe UI',sans-serif;line-height:1.75}
+nav.top{position:sticky;top:0;z-index:10;background:#0b1220;border-bottom:1px solid var(--line);padding:10px 24px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+nav.top .brand{font-weight:700;font-size:14px;margin-right:12px;color:#fff}
+nav.top a{color:var(--muted);text-decoration:none;font-size:13px;padding:5px 11px;border-radius:7px;white-space:nowrap}
+nav.top a:hover{background:#172033;color:var(--txt)}
+nav.top a.active{background:#334155;color:#fff;font-weight:600}
+main{max-width:1000px;margin:0 auto;padding:32px 28px 96px}
+main img{max-width:100%;height:auto;border-radius:12px;border:1px solid var(--line);display:block;margin:18px auto}
+h1{font-size:26px;border-bottom:2px solid var(--line);padding-bottom:12px;margin-top:8px}
+h2{font-size:20px;border-bottom:1px solid var(--line);padding-bottom:7px;margin-top:38px}
+h3{font-size:16px;margin-top:28px;color:#cbd5e1}h4{font-size:14px;margin-top:20px;color:#cbd5e1}
+a{color:var(--accent)}p,li{font-size:14.5px}
+code{background:#0b1220;padding:2px 7px;border-radius:5px;font-size:13px;font-family:ui-monospace,Menlo,monospace}
+pre{background:#0b1220;border:1px solid var(--line);border-radius:10px;padding:16px;overflow:auto;font-size:12.5px;line-height:1.55}
+pre code{background:none;padding:0}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:13px}
+th,td{border:1px solid var(--line);padding:8px 11px;text-align:left;vertical-align:top}
+th{background:var(--card);font-weight:600}tr:nth-child(even) td{background:#172033}
+blockquote{border-left:4px solid #475569;margin:16px 0;padding:4px 18px;color:var(--muted);background:#131c2e;border-radius:0 8px 8px 0}
+hr{border:none;border-top:1px solid var(--line);margin:32px 0}
+ul,ol{padding-left:24px}li{margin:4px 0}strong{color:#f1f5f9}
+footer{max-width:1000px;margin:0 auto;padding:20px 28px 60px;color:var(--muted);font-size:12px;border-top:1px solid var(--line)}
+</style></head><body>
+<nav class="top"><span class="brand">rdra-analyzer ドメインモデル</span><a href="discovery.html" class="active">ディスカバリ</a><a href="event-storming.html">イベントストーミング</a><a href="bounded-contexts.html">境界づけられたコンテキスト</a><a href="context-map.html">コンテキストマップ</a><a href="aggregates.html">集約</a><a href="domain-events.html">ドメインイベント</a><a href="glossary.html">ユビキタス言語</a><a href="workflows.html">ワークフロー</a><a href="sync.html">モデル⇔実装 Sync</a></nav>
+<main>
+<h1 id="discovery">Discovery</h1>
+<blockquote>Phase 1 / DDD — Core Domain の特定（rdra-analyzer 自身のドメイン）</blockquote>
+<h2 id="">ビジネス概要</h2>
+<p><code>rdra-analyzer</code> は、既存リポジトリのソースコードを <strong>RDRA（Relationship-Driven Requirements Analysis）の要求モデル</strong>へ翻訳し直すツール。 主要ユーザーは <strong>PdM（プロダクトマネージャー）</strong>。PdM が次の3つの問いに答えられるよう、コードを「要求の言葉」で読み解けるようにする。</p>
+<ol><li>このコードは本当に必要か？（必要性の検証）</li><li>なぜ必要なのか？（存在理由・根拠の説明）</li><li>次に作るなら何か？（次機能の示唆）</li></ol>
+<p>判断そのものは PdM が下す。ツールの役割は、判断に足る <strong>正確な要求モデルを供給する</strong>こと。</p>
+<h2 id="core-domain">Core Domain</h2>
+<ul><li><strong>名前</strong>: RDRA 要求モデル抽出（Requirements Model Extraction）</li><li><strong>責務</strong>: 言語・フレームワーク非依存で、LLM 駆動で対象コードを動的解析し、</li></ul>
+<p>情報モデル・ユースケース・状態遷移・ビジネスポリシーといった <strong>RDRA モデルをコードと乖離なく起こす</strong>。</p>
+<ul><li><strong>理由（なぜ Core か）</strong>: PdM の3つの問いに答える土台はすべてここ。抽出が正確でコードと一致していれば、</li></ul>
+<p>判断は PdM 側で可能。逆に抽出が不正確・コード乖離していれば、上に乗る一切の分析・可視化が信頼を失う。</p>
+<ul><li><strong>差別化要因</strong>:<ul><li><strong>言語・FW 非依存</strong>（Laravel/Rails/Django/Spring/Go/Rust… を <code>CLAUDE.md</code>/<code>AGENTS.md</code> コンテキストで横断）</li><li><strong>コードとの乖離防止</strong>（<code>enrich</code> による checkpoint からの決定的な再導出＝LLM に依存しない事実ベースの紐付け）</li><li>図やビューワーは「説明の器」にすぎず、競争優位は抽出の正確さに宿る。</li></ul></li></ul>
+<h2 id="2">分析インプット（2系統）</h2>
+<table><thead><tr><th>系統</th><th>源泉</th><th>意味</th></tr></thead><tbody><tr><td><strong>静的</strong></td><td>対象リポジトリのソースコード</td><td>コードに刻まれた「あるべき要求」</td></tr><tr><td><strong>動的（取り込み）</strong></td><td>loop-e2e のシナリオ実績（<code>reconcile</code>）</td><td>「実際に使われている要求」の裏付け。要求モデルへ突き合わせる</td></tr></tbody></table>
+<h2 id="core">Core の品質基準と調停ルール（深掘りで確定）</h2>
+<h3 id="precision">品質の最優先軸：正確性（Precision）</h3>
+<p>「乖離なく」の中で <strong>(b) 正確性 = 幻覚を出さないこと</strong> が最優先。 PdM は「このUCは実在する」前提で必要性を語るため、コードに無いものを抽出するのが最も致命的。 取りこぼし（網羅性）より、嘘を出さないことを優先する。</p>
+<h3 id="core-invariant">Core の不変条件（invariant）</h3>
+<ul><li><strong>抽出要素 → コード証拠</strong> の対応が常に存在する。<strong>根拠なき UC・エンティティは確定モデルに出さない。</strong></li><li>方針は <strong>(P) Precision 重視＝棄却</strong>。裏付けの取れない抽出は確定モデルから捨てる。</li><li>ただし <strong>棄却＝破棄ではない</strong>。Core は2つのアウトプットを持つ：<ol><li><strong>確定要求モデル</strong> — 根拠あり。PdM が判断に使う。</li><li><strong>取りこぼし・棄却ログ</strong> — 根拠を示せず棄却したものを記録し、<strong>検証フロー</strong>へ回す（取りこぼしの見える化）。</li></ol></li></ul>
+<h3 id="loop-e2e">静的抽出 ↔ loop-e2e 実績（動的）の調停ルール</h3>
+<table><thead><tr><th>状況</th><th>調停</th></tr></thead><tbody><tr><td>静的で確定</td><td>そのまま確定（コード根拠が最強）</td></tr><tr><td>静的で棄却 ＋ loop-e2e に実績あり</td><td><strong>救済</strong>して「実績由来」ラベルで確定（実際に動いている証拠）</td></tr><tr><td>静的に無い ＋ loop-e2e のみに在る</td><td>新規UC（<code>UC-LE-NNN</code>）として取り込み（既存 <code>reconcile</code> 挙動）</td></tr><tr><td><strong>静的で確定 ＋ loop-e2e と矛盾</strong></td><td><strong>コードを真とする</strong>（システムのコア判断基準）。矛盾は「要調査」フラグで記録し PdM に提示（実装と実挙動のズレ＝バグ or 仕様変更の兆候）</td></tr></tbody></table>
+<blockquote><strong>コア判断基準</strong>: 矛盾時はコードを真とする。</blockquote>
+<h2 id="supporting-subdomains">Supporting Subdomains</h2>
+<ul><li><strong>ソースコード解析</strong>（<code>source_parser</code> / <code>screen_analyzer</code> / <code>project_context</code>）: コードからルート・モデル・画面を抽出し Core に供給する。Core に必須だが差別化ではない。</li><li><strong>CRUD ギャップ分析</strong>（<code>gap</code>）: 抽出済みモデルから孤立エンティティ・欠落操作を導く派生分析。PdM の「本当に必要か」を補助する。</li><li><strong>可視化 / ビューワー</strong>（<code>mermaid_renderer</code> / <code>viewer_template</code>）: 抽出結果を PdM に伝える説明の器。</li><li><strong>外部実績データ取り込み</strong>（<code>reconcile</code> / <code>enrich</code>）: loop-e2e のシナリオを分析対象データとして取り込み、要求モデルを補強する。</li></ul>
+<h2 id="generic-subdomains">Generic Subdomains</h2>
+<ul><li><strong>LLM プロバイダ抽象</strong>（<code>llm/</code> — Anthropic API / Claude Code CLI）: 代替可能な汎用基盤。</li><li><strong>Mermaid 記法レンダリング</strong>: 既存記法への変換。汎用。</li></ul>
+<h2 id="">スコープ外（今回のドメインモデルに含めない）</h2>
+<ul><li><strong>E2E 実行</strong>: 別システム（loop-e2e）へ委譲済み。</li><li><strong>操作シナリオ生成（<code>scenarios</code>）</strong>: 不要。loop-e2e へ一本化。</li></ul>
+<h2 id="swot">SWOT（任意・暫定）</h2>
+<table><thead><tr><th>Strengths</th><th>Weaknesses</th></tr></thead><tbody><tr><td>言語・FW 非依存の横断抽出 / コード乖離防止の決定的紐付け（enrich）</td><td>LLM 抽出の精度・再現性に品質が依存 / コード規約が薄いリポジトリでは精度低下</td></tr></tbody></table>
+<table><thead><tr><th>Opportunities</th><th>Threats</th></tr></thead><tbody><tr><td>loop-e2e 実績との突き合わせで「生きた要求」を可視化 / PdM 向け判断支援アウトプットの拡張余地</td><td>対象コードの規模・多様性増大に伴う抽出コスト / LLM 出力の非決定性</td></tr></tbody></table>
+<h2 id="">未解決の問い</h2>
+<ul><li>RDRA モデルの構成要素（情報モデル / UC / 状態遷移 / ビジネスポリシー）のうち、どれが抽出の最小コアで、どれが派生か — Phase 2/3 で境界を引く際に要確定。</li></ul>
+<h3 id="">深掘りで解決済み</h3>
+<ul><li><del>「コードと乖離なく」をどう保証・検証するか</del> → <strong>正確性(Precision)最優先・根拠なきものは棄却・棄却ログ＋検証フローで見える化</strong>（上記「Core の品質基準」参照）。</li><li><del>loop-e2e 実績と静的抽出が食い違ったときどちらを真とするか</del> → <strong>矛盾時はコードを真</strong>（上記「調停ルール」参照）。</li></ul>
+</main>
+<footer>rdra-analyzer ドメインモデル &nbsp;|&nbsp; source: <code>docs/domain/discovery.md</code> &nbsp;|&nbsp; generated by /ddd publish</footer>
+</body></html>

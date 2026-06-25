@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Domain Events</title><style>:root{--bg:#0f172a;--card:#1e293b;--line:#334155;--txt:#e2e8f0;--muted:#94a3b8;--accent:#7dd3fc}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--txt);font-family:-apple-system,'Hiragino Kaku Gothic ProN','Segoe UI',sans-serif;line-height:1.75}
+nav.top{position:sticky;top:0;z-index:10;background:#0b1220;border-bottom:1px solid var(--line);padding:10px 24px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+nav.top .brand{font-weight:700;font-size:14px;margin-right:12px;color:#fff}
+nav.top a{color:var(--muted);text-decoration:none;font-size:13px;padding:5px 11px;border-radius:7px;white-space:nowrap}
+nav.top a:hover{background:#172033;color:var(--txt)}
+nav.top a.active{background:#334155;color:#fff;font-weight:600}
+main{max-width:1000px;margin:0 auto;padding:32px 28px 96px}
+main img{max-width:100%;height:auto;border-radius:12px;border:1px solid var(--line);display:block;margin:18px auto}
+h1{font-size:26px;border-bottom:2px solid var(--line);padding-bottom:12px;margin-top:8px}
+h2{font-size:20px;border-bottom:1px solid var(--line);padding-bottom:7px;margin-top:38px}
+h3{font-size:16px;margin-top:28px;color:#cbd5e1}h4{font-size:14px;margin-top:20px;color:#cbd5e1}
+a{color:var(--accent)}p,li{font-size:14.5px}
+code{background:#0b1220;padding:2px 7px;border-radius:5px;font-size:13px;font-family:ui-monospace,Menlo,monospace}
+pre{background:#0b1220;border:1px solid var(--line);border-radius:10px;padding:16px;overflow:auto;font-size:12.5px;line-height:1.55}
+pre code{background:none;padding:0}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:13px}
+th,td{border:1px solid var(--line);padding:8px 11px;text-align:left;vertical-align:top}
+th{background:var(--card);font-weight:600}tr:nth-child(even) td{background:#172033}
+blockquote{border-left:4px solid #475569;margin:16px 0;padding:4px 18px;color:var(--muted);background:#131c2e;border-radius:0 8px 8px 0}
+hr{border:none;border-top:1px solid var(--line);margin:32px 0}
+ul,ol{padding-left:24px}li{margin:4px 0}strong{color:#f1f5f9}
+footer{max-width:1000px;margin:0 auto;padding:20px 28px 60px;color:var(--muted);font-size:12px;border-top:1px solid var(--line)}
+</style></head><body>
+<nav class="top"><span class="brand">rdra-analyzer ドメインモデル</span><a href="discovery.html">ディスカバリ</a><a href="event-storming.html">イベントストーミング</a><a href="bounded-contexts.html">境界づけられたコンテキスト</a><a href="context-map.html">コンテキストマップ</a><a href="aggregates.html">集約</a><a href="domain-events.html" class="active">ドメインイベント</a><a href="glossary.html">ユビキタス言語</a><a href="workflows.html">ワークフロー</a><a href="sync.html">モデル⇔実装 Sync</a></nav>
+<main>
+<h1 id="domain-events">Domain Events</h1>
+<blockquote>Phase 6 / DDD — rdra-analyzer のドメインイベント設計（命名・プロパティ・因果）。<br><a href="event-storming.html">event-storming.md</a> の 28 イベント、<a href="aggregates.html">aggregates.md</a> の集約、<a href="context-map.html">context-map.md</a> の境界を踏まえる。<br><strong>方針（確定）</strong>: 受け渡しは <strong>Enrichment</strong>（イベントに必要データを同梱）。Event Sourcing は <strong>業務フロー（#5）のみ ES 的</strong>に履歴保持、他は再生成 or 追記ログ。<br><strong>命名</strong>: 和文過去形（モデル）⇄ 英 PascalCase 過去形（Phase 10 型・括弧内）。<code>occurredOn</code> は全イベント必須。<br><strong>コードの現状</strong>: 大半のイベントは関数実行に暗黙化され <code>occurredOn</code> 未スタンプ＝<strong>実体化は to-be</strong>。Audit 系は record（<code>RejectedUsecase</code>/<code>Conflict</code>）が既にイベントペイロードと一致＝実質 Enrichment 済み。</blockquote>
+<hr>
+<h2 id="bc-core">BC ① 要求モデル抽出（Core）</h2>
+<p>発生元 Aggregate: 解析セッション / UseCase / Entity。Consumer は同一プロセスの後続ステージ（パイプライン進行）。</p>
+<table><thead><tr><th>イベント（和文 / 英）</th><th>トリガー</th><th>プロパティ（Enrichment）</th><th>Consumer</th></tr></thead><tbody><tr><td>解析が起動された / <code>AnalysisStarted</code></td><td>PdM: 解析を起動する</td><td><code>sessionId, repoPaths[], occurredOn</code></td><td>解析セッション</td></tr><tr><td>コンテキストが構築された / <code>ContextBuilt</code></td><td>System</td><td><code>sessionId, manifestSources[], occurredOn</code></td><td>抽出</td></tr><tr><td>ルートが抽出された / <code>RoutesExtracted</code></td><td>System</td><td><code>sessionId, endpoints[]{method,path}, occurredOn</code></td><td>UC候補生成</td></tr><tr><td>モデルが抽出された / <code>ModelsExtracted</code></td><td>System</td><td><code>sessionId, entities[], occurredOn</code></td><td>情報モデル(Projection)</td></tr><tr><td>画面が分析された / <code>ScreensAnalyzed</code></td><td>System</td><td><code>sessionId, screens[]{path,component}, occurredOn</code></td><td>enrich / システム境界</td></tr><tr><td>チェックポイントが保存された / <code>CheckpointSaved</code></td><td>System</td><td><code>sessionId, phase, completedRepos[], occurredOn</code></td><td>再開（冪等）</td></tr><tr><td>UC候補が生成された / <code>UsecaseCandidatesGenerated</code></td><td>System: UC候補を生成する</td><td><code>sessionId, candidateIds[], occurredOn</code></td><td>コード証拠照合</td></tr><tr><td><strong>UCが確定された</strong> / <code>UsecaseConfirmed</code> 🎯</td><td>System: UCを確定する</td><td><code>ucId, confidence, evidenceAnchors[], occurredOn</code></td><td>④ Projection 再生成</td></tr><tr><td><strong>UCが棄却された</strong> / <code>UsecaseRejected</code> 🎯</td><td>System: UCを棄却する</td><td><code>ucId, reason, missingEvidence[], occurredOn</code></td><td><strong>棄却ログ Audit</strong></td></tr><tr><td>関連が再導出された / <code>RelationsReDerived</code> 🎯</td><td>System: enrich</td><td><code>ucIds[], occurredOn</code></td><td>（決定的・冪等）</td></tr></tbody></table>
+<p><strong>不変条件との対応</strong>: <code>UsecaseConfirmed</code> は「確定 ⇔ <code>evidenceAnchors</code> が1つ以上」を満たすときのみ発行。違反は <code>UsecaseRejected</code>（→棄却ログ）へ分岐。</p>
+<hr>
+<h2 id="bc-supporting-acl">BC ② 実績調停（Supporting / ACL）</h2>
+<p>発生元 Aggregate: 実績シナリオ / Conflict。inbound は loop-e2e から Published Language（ACL 翻訳）。</p>
+<table><thead><tr><th>イベント（和文 / 英）</th><th>トリガー</th><th>プロパティ（Enrichment）</th><th>Consumer</th></tr></thead><tbody><tr><td>実績シナリオが取り込まれた / <code>ActualScenarioIngested</code></td><td>loop-e2e（PL→ACL）</td><td><code>scenarioId, usecaseId?, steps[], frontendUrl, occurredOn</code></td><td>調停</td></tr><tr><td>新規UCが実績から生成された / <code>UsecaseSynthesizedFromActual</code></td><td>System</td><td><code>ucId(UC-LE-NNN), loopE2eId, confidence=inferred, occurredOn</code></td><td>Shared Kernel 書き戻し</td></tr><tr><td><strong>棄却UCが実績で救済された</strong> / <code>RejectedUsecaseRescued</code> 🎯</td><td>System</td><td><code>ucId, loopE2eId, occurredOn</code></td><td>UC 再昇格（<strong>#1 follow-on 未配線</strong>）</td></tr><tr><td><strong>コードと実績の矛盾が検出された</strong> / <code>ConflictDetected</code> 🎯</td><td>System: 矛盾を検出する</td><td><code>ucId, kind, codeValue（真）, actualValue, occurredOn</code></td><td><strong>矛盾 Audit</strong></td></tr></tbody></table>
+<p><strong>「コードを真」</strong>: <code>ConflictDetected</code> は UC を変更しない。<code>codeValue</code> が真、<code>actualValue</code> は参考。要調査として矛盾 Audit へ追記のみ。</p>
+<hr>
+<h2 id="bc-supporting-5-es">BC ③ 業務フロー協働（Supporting）〔#5 未実装・ES 的〕</h2>
+<p>発生元 Aggregate: BusinessFlow（<strong>唯一の Event Sourcing 対象</strong>）。承認状態は下記イベントストリームの再生で復元。</p>
+<table><thead><tr><th>イベント（和文 / 英）</th><th>トリガー</th><th>プロパティ（Enrichment）</th><th>Consumer</th></tr></thead><tbody><tr><td>業務フローが想定された / <code>BusinessFlowProposed</code></td><td>System</td><td><code>flowId, ucIds[], occurredOn</code></td><td>PdM レビュー</td></tr><tr><td>業務フローがレビューされた / <code>BusinessFlowReviewed</code></td><td>PdM</td><td><code>flowId, by=PdM, occurredOn</code></td><td>—</td></tr><tr><td>業務フローにFBされた / <code>BusinessFlowFeedbackGiven</code></td><td>PdM</td><td><code>flowId, by=PdM, feedback, occurredOn</code></td><td>再想定</td></tr><tr><td>業務フローが再想定された / <code>BusinessFlowReProposed</code></td><td>System</td><td><code>flowId, occurredOn</code></td><td>PdM レビュー</td></tr><tr><td>業務フローが編集された / <code>BusinessFlowEdited</code></td><td>PdM</td><td><code>flowId, by=PdM, edits, occurredOn</code></td><td>—</td></tr><tr><td><strong>業務フローが承認された</strong> / <code>BusinessFlowApproved</code> ✅</td><td>PdM: 承認する</td><td><code>flowId, approver=PdM, occurredOn</code></td><td>引き渡し</td></tr><tr><td>承認済みフローが引き渡された / <code>ApprovedFlowHandedOff</code></td><td>System</td><td><code>flowId, occurredOn</code></td><td><strong>loop-e2e（PL）</strong></td></tr></tbody></table>
+<p><strong>ES の根拠</strong>: 「誰がいつ何を差し戻し/承認したか」は再解析で復元できない一度きりの PdM 判断＝履歴が真実。状態機械（想定→…→承認→引き渡し）は append-only ストリームの畳み込みで得る。承認・引き渡しの前提イベント（因果）を満たさない遷移は不正。</p>
+<hr>
+<h2 id="bc-supporting-projection">BC ④ 可視化（Supporting）— Projection 再生成イベント</h2>
+<p><code>UsecaseConfirmed</code> / <code>ModelsExtracted</code> 等を受けて派生投影（Read Model）を再生成する。状態を持たず冪等。</p>
+<table><thead><tr><th>イベント</th><th>プロパティ</th><th>備考</th></tr></thead><tbody><tr><td>システム境界が特定された / <code>SystemBoundaryIdentified</code></td><td><code>sessionId, occurredOn</code></td><td>接点×起点の Projection（#3）</td></tr><tr><td>情報モデル/状態遷移/BP/CRUDギャップ/ビューワーが生成された</td><td><code>sessionId, occurredOn</code></td><td>各 Projection（確度=derived）</td></tr></tbody></table>
+<hr>
+<h2 id="event-flow">Event Flow（コンテキスト間）</h2>
+<pre><code>loop-e2e ──ActualScenarioIngested (PL→ACL)──▶ ② 実績調停
+   ② ──UsecaseSynthesized / RejectedUsecaseRescued (Shared Kernel 書き戻し)──▶ ① 要求モデル抽出
+   ② ──ConflictDetected──▶ 矛盾 Audit（UC 不変・コードを真）
+   ① ──UsecaseConfirmed──▶ ④ 可視化（Projection 再生成）
+   ① ──UsecaseRejected──▶ 棄却ログ Audit
+   ③ ──ApprovedFlowHandedOff (PL)──▶ loop-e2e（テスト作成・実行へ委譲）</code></pre>
+<p>因果整合: <code>ApprovedFlowHandedOff</code> は <code>BusinessFlowApproved</code> の後でのみ発火。<code>RejectedUsecaseRescued</code> は <code>UsecaseRejected</code> ＋ <code>ActualScenarioIngested</code> の両方を前提（救済フロー＝未配線）。</p>
+<hr>
+<h2 id="event-sourcing">Event Sourcing 対象</h2>
+<table><thead><tr><th>Aggregate</th><th>ES</th><th>理由</th></tr></thead><tbody><tr><td><strong>業務フロー（BusinessFlow）</strong></td><td>✅ <strong>採用</strong></td><td>PdM の承認/差し戻し履歴は再生成不可・一度きり。監査価値あり。状態＝イベント再生</td></tr><tr><td>UseCase / Entity / 解析セッション</td><td>❌ 不採用</td><td>対象コードから決定的に再生成可能（<code>enrich</code> が象徴）。状態上書きで十分</td></tr><tr><td>Projection 各種（システム境界/情報モデル/…）</td><td>❌ 不採用</td><td>確定層から再生成可能・確度 derived</td></tr><tr><td>棄却ログ / 矛盾</td><td>△ append-only ログ</td><td>追記専用だが full ES（CQRS/再生）は過剰。<code>rejection_log.json</code> / <code>conflict_report.json</code> で足りる</td></tr></tbody></table>
+<blockquote>全面 ES は採らない。業務フローだけ CQRS 的な履歴を持ち、他は「再生成 or 追記ログ」。</blockquote>
+<hr>
+<h2 id="">未解決の問い</h2>
+<ul><li><code>occurredOn</code> の実体化: 現状イベントは関数実行に暗黙化。型駆動（Phase 10）でイベント型に <code>occurredOn</code> を持たせるか、引き続き暗黙にするか。</li><li>業務フロー ES の保存先（JSON ストリーム / SQLite 等）と再生ロジックの置き場（#5・Phase 9–11）。</li><li>救済フロー（<code>RejectedUsecaseRescued</code>）の発火条件と所有者（② ACL 内 か 棄却ログ集約か）（#1 follow-on / Phase 9）。</li></ul>
+</main>
+<footer>rdra-analyzer ドメインモデル &nbsp;|&nbsp; source: <code>docs/domain/domain-events.md</code> &nbsp;|&nbsp; generated by /ddd publish</footer>
+</body></html>

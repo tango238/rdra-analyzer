@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Context Map</title><style>:root{--bg:#0f172a;--card:#1e293b;--line:#334155;--txt:#e2e8f0;--muted:#94a3b8;--accent:#7dd3fc}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--txt);font-family:-apple-system,'Hiragino Kaku Gothic ProN','Segoe UI',sans-serif;line-height:1.75}
+nav.top{position:sticky;top:0;z-index:10;background:#0b1220;border-bottom:1px solid var(--line);padding:10px 24px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+nav.top .brand{font-weight:700;font-size:14px;margin-right:12px;color:#fff}
+nav.top a{color:var(--muted);text-decoration:none;font-size:13px;padding:5px 11px;border-radius:7px;white-space:nowrap}
+nav.top a:hover{background:#172033;color:var(--txt)}
+nav.top a.active{background:#334155;color:#fff;font-weight:600}
+main{max-width:1000px;margin:0 auto;padding:32px 28px 96px}
+main img{max-width:100%;height:auto;border-radius:12px;border:1px solid var(--line);display:block;margin:18px auto}
+h1{font-size:26px;border-bottom:2px solid var(--line);padding-bottom:12px;margin-top:8px}
+h2{font-size:20px;border-bottom:1px solid var(--line);padding-bottom:7px;margin-top:38px}
+h3{font-size:16px;margin-top:28px;color:#cbd5e1}h4{font-size:14px;margin-top:20px;color:#cbd5e1}
+a{color:var(--accent)}p,li{font-size:14.5px}
+code{background:#0b1220;padding:2px 7px;border-radius:5px;font-size:13px;font-family:ui-monospace,Menlo,monospace}
+pre{background:#0b1220;border:1px solid var(--line);border-radius:10px;padding:16px;overflow:auto;font-size:12.5px;line-height:1.55}
+pre code{background:none;padding:0}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:13px}
+th,td{border:1px solid var(--line);padding:8px 11px;text-align:left;vertical-align:top}
+th{background:var(--card);font-weight:600}tr:nth-child(even) td{background:#172033}
+blockquote{border-left:4px solid #475569;margin:16px 0;padding:4px 18px;color:var(--muted);background:#131c2e;border-radius:0 8px 8px 0}
+hr{border:none;border-top:1px solid var(--line);margin:32px 0}
+ul,ol{padding-left:24px}li{margin:4px 0}strong{color:#f1f5f9}
+footer{max-width:1000px;margin:0 auto;padding:20px 28px 60px;color:var(--muted);font-size:12px;border-top:1px solid var(--line)}
+</style></head><body>
+<nav class="top"><span class="brand">rdra-analyzer ドメインモデル</span><a href="discovery.html">ディスカバリ</a><a href="event-storming.html">イベントストーミング</a><a href="bounded-contexts.html">境界づけられたコンテキスト</a><a href="context-map.html" class="active">コンテキストマップ</a><a href="aggregates.html">集約</a><a href="domain-events.html">ドメインイベント</a><a href="glossary.html">ユビキタス言語</a><a href="workflows.html">ワークフロー</a><a href="sync.html">モデル⇔実装 Sync</a></nav>
+<main>
+<h1 id="context-map">Context Map</h1>
+<blockquote>Phase 4 / DDD — rdra-analyzer の Bounded Context 間関係。<a href="bounded-contexts.html">bounded-contexts.md</a> の 6 BC ＋ 外部 loop-e2e。<br>openQuestion「BC 間の関係種別（特に loop-e2e との上流/下流）」を解消する。</blockquote>
+<h2 id="">図</h2>
+<pre><code>flowchart LR
+    subgraph ext[&quot;外部システム&quot;]
+        LE[&quot;loop-e2e&quot;]
+    end
+
+    PC[&quot;プロジェクトコンテキスト構築&lt;br/&gt;(Generic)&quot;]
+    LLM[&quot;LLM 抽象&lt;br/&gt;(Generic)&quot;]
+    CORE[&quot;① 要求モデル抽出&lt;br/&gt;★Core&quot;]
+    REC[&quot;② 実績調停&lt;br/&gt;(Supporting / ACL)&quot;]
+    WF[&quot;③ 業務フロー協働&lt;br/&gt;(Supporting)&quot;]
+    VIZ[&quot;④ 可視化&lt;br/&gt;(Supporting)&quot;]
+
+    PC --&gt;|&quot;C-S: コンテキスト注入&quot;| CORE
+    LLM -.-&gt;|&quot;ACL: provider 抽象&quot;| CORE
+    LLM -.-&gt;|&quot;ACL: provider 抽象&quot;| WF
+    CORE &lt;==&gt;|&quot;Shared Kernel:&lt;br/&gt;analysis_result.json&lt;br/&gt;confidence / OperationScenario&quot;| REC
+    LE ==&gt;|&quot;PL: pending.json + ② に ACL&quot;| REC
+    CORE --&gt;|&quot;C-S: 確定UC（#5 未）&quot;| WF
+    WF ==&gt;|&quot;PL: 承認済みフロー（#5 未）&quot;| LE
+    CORE --&gt;|&quot;C-S: 抽出物&quot;| VIZ
+    REC -.-&gt;|&quot;merged を可視化&quot;| VIZ
+
+    classDef core fill:#fff3e0,stroke:#FF9800,stroke-width:3px
+    classDef supporting fill:#e8f5e9,stroke:#2E7D32
+    classDef generic fill:#eceff1,stroke:#607D8B
+    classDef external fill:#e8f4fd,stroke:#2196F3
+    class CORE core
+    class REC,WF,VIZ supporting
+    class PC,LLM generic
+    class LE external</code></pre>
+<p>凡例: <code>C-S</code> = Customer-Supplier（U→D）/ <code>PL</code> = Published Language / <code>ACL</code> = Anticorruption Layer / <code>Shared Kernel</code> = 小さな共有モデル / <code>==&gt;</code> = Published Language 境界 / <code>&lt;==&gt;</code> = Shared Kernel / <code>-.-&gt;</code> = ACL 隔離。</p>
+<h2 id="">関係一覧</h2>
+<table><thead><tr><th>#</th><th>Upstream</th><th>Downstream</th><th>関係</th><th>統合方式</th><th>状態</th></tr></thead><tbody><tr><td>R1</td><td>プロジェクトコンテキスト構築</td><td>① 要求モデル抽出</td><td>Customer-Supplier</td><td>関数注入（<code>project_context</code>）</td><td>✅</td></tr><tr><td>R2</td><td>LLM 抽象</td><td>① 要求モデル抽出 / ③</td><td>ACL（消費側で隔離）</td><td><code>llm/provider.py</code> 抽象インターフェース</td><td>✅（③分は #5 未）</td></tr><tr><td>R3+R8</td><td>① 要求モデル抽出 ⇔ ② 実績調停</td><td>（双方向）</td><td><strong>Shared Kernel</strong></td><td><code>analysis_result.json</code> ＋ <code>confidence</code> / <code>OperationScenario</code> 型</td><td>✅</td></tr><tr><td>R4</td><td><strong>loop-e2e（外部）</strong></td><td>② 実績調停</td><td><strong>Published Language ＋ ACL</strong></td><td><code>loop-e2e-pending.json</code>（<code>reconcile</code> が <code>normalize_route</code> で翻訳）</td><td>✅</td></tr><tr><td>R5</td><td>① 要求モデル抽出</td><td>③ 業務フロー協働</td><td>Customer-Supplier</td><td>確定 UC 群（同一 <code>analysis_result.json</code> 由来）</td><td>🔴 未（#5）</td></tr><tr><td>R6</td><td>③ 業務フロー協働</td><td><strong>loop-e2e（外部）</strong></td><td><strong>Published Language</strong></td><td>承認済み業務フローの引き渡し</td><td>🔴 未（#5）</td></tr><tr><td>R7</td><td>① 要求モデル抽出</td><td>④ 可視化</td><td>Customer-Supplier</td><td>抽出物（<code>mermaid_renderer</code> / <code>viewer</code>）</td><td>✅</td></tr><tr><td>R9</td><td>② 実績調停</td><td>④ 可視化</td><td>Conformist</td><td>merged <code>analysis_result.json</code> を可視化</td><td>🟡</td></tr></tbody></table>
+<h2 id="">統合の詳細</h2>
+<h3 id="r3-r8-shared-kernel">R3+R8 ① 要求モデル抽出 ⇔ ② 実績調停 — Shared Kernel</h3>
+<ul><li><strong>関係</strong>: Shared Kernel（双方向）。② は ① の出力を読み、新規UC・救済・矛盾を同一成果物へマージし返す。</li><li><strong>共有モデル</strong>: <code>analysis_result.json</code>（UC 集合）＋ 型 <code>confidence</code>（<code>confidence.py</code>）・<code>OperationScenario</code>/<code>OperationStep</code>（<code>scenario_builder</code>）。</li><li><strong>統合方式</strong>: ファイル共有（<code>apply_reconcile</code> が読み→検証→書き戻し）。<code>validate()</code> で参照整合性チェック後のみ書き戻す。</li><li><strong>境界規律</strong>: 共有は<strong>小さく</strong>保つ。② の救済（棄却→確定昇格・#1 follow-on）と矛盾（#4・コードを真で UC 不変）は Shared Kernel を介す。confidence の意味（confirmed/derived/inferred）を両 BC で一致させる責務。</li></ul>
+<h3 id="r4-loop-e2e-published-language-acl">R4 loop-e2e → ② 実績調停 — Published Language ＋ ACL</h3>
+<ul><li><strong>関係</strong>: loop-e2e が上流（実績供給）、② が下流。② が腐敗防止層。</li><li><strong>流れるデータ</strong>: <code>loop-e2e-pending.json</code>（実績シナリオ）。</li><li><strong>統合方式</strong>: Published Language（rdra-export スキーマ）。② の <code>normalize_route</code> は loop-e2e spec と<strong>同一実装</strong>＝共有言語の翻訳契約。</li><li><strong>ACL の役割</strong>: 外部スキーマを内部 <code>Usecase</code>/<code>OperationScenario</code> へ翻訳し、Core を loop-e2e の変更から隔離。「コードを真」（#4）は ACL 内の調停ルール。</li></ul>
+<h3 id="r6-loop-e2e-published-language">R6 ③ 業務フロー協働 → loop-e2e — Published Language（未実装）</h3>
+<ul><li><strong>関係</strong>: ③ が上流（承認済み業務フロー供給）、loop-e2e が下流（テスト作成・実行）。</li><li><strong>境界</strong>: ③ の責務は「生成＋PdM 承認」まで。テスト作成・E2E 実行は越境しない（loop-e2e へ委譲）。</li><li><strong>状態</strong>: #5（業務フロー協働 BC）deferred ＝ この PL も未実装。Phase 5/9–11 が前提。</li></ul>
+<h3 id="r2-llm-acl">R2 LLM 抽象 → ①/③ — ACL（消費側隔離）</h3>
+<ul><li><strong>関係</strong>: Generic 上流。<code>llm/provider.py</code> の抽象インターフェースに Anthropic API / Claude Code CLI が適合。</li><li><strong>統合方式</strong>: 消費側 ACL。① は具体プロバイダを知らず provider 抽象にのみ依存＝代替可能（Generic の所以）。</li></ul>
+<h2 id="7">#7（コード構造リファクタ）への含意</h2>
+<p>関係種別が確定したことで sync #7 の前提が外れた。Shared Kernel（R3+R8）と Published Language（R4/R6）が パッケージ境界の指針になる:</p>
+<ul><li><strong><code>shared/</code></strong> ← Shared Kernel: <code>confidence</code> ＋ <code>scenario_builder</code>（<code>OperationScenario</code>/<code>OperationStep</code>）。①②④ が依存。</li><li><strong><code>extraction/</code></strong>（① Core）/ <strong><code>reconciliation/</code></strong>（② ACL）は Shared Kernel 越しに結合。ACL 翻訳（<code>normalize_route</code> 等）は <code>reconciliation/</code> 内に閉じる。</li><li><strong><code>workflow/</code></strong>（③）/ <strong><code>visualization/</code></strong>（④）/ <strong><code>llm/</code></strong> / <strong><code>context/</code></strong>（Generic）。</li><li>loop-e2e との PL スキーマ（pending.json）は <code>reconciliation/</code> の公開境界に置く。</li></ul>
+<p>→ この方針で <strong>sync #7</strong> を計画可能（destructive な横断移動のため承認ゲート前提）。</p>
+<h2 id="mapping">言語の境界で発見した事実（mapping）</h2>
+<ul><li><strong>loop-e2e は単一の関係ではなく双方向の別契約</strong>: ② への上流（実績 PL）と ③ からの下流（承認済みフロー PL）。同じ外部システムだが BC ごとに役割が反転する。</li><li><strong>① と ② は対等な Partnership ではなく Shared Kernel</strong>: Core↔Supporting の非対称があり、共有を <code>analysis_result.json</code> ＋少数の型に限定して結合を管理する方が健全。</li></ul>
+<h2 id="">未解決の問い</h2>
+<ul><li>Shared Kernel（<code>analysis_result.json</code>）のスキーマ所有者は ① か、共同管理か（Phase 5/6 で版管理方針）。</li><li>④ 可視化は Conformist でよいか、Open Host（ビューワー API）化する余地はあるか（将来）。</li><li>R5/R6（③ 業務フロー協働の PL）は #5 実装時に具体化（Phase 5/9–11 後）。</li></ul>
+</main>
+<footer>rdra-analyzer ドメインモデル &nbsp;|&nbsp; source: <code>docs/domain/context-map.md</code> &nbsp;|&nbsp; generated by /ddd publish</footer>
+</body></html>

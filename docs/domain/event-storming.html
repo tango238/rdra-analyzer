@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Event Storming</title><style>:root{--bg:#0f172a;--card:#1e293b;--line:#334155;--txt:#e2e8f0;--muted:#94a3b8;--accent:#7dd3fc}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--txt);font-family:-apple-system,'Hiragino Kaku Gothic ProN','Segoe UI',sans-serif;line-height:1.75}
+nav.top{position:sticky;top:0;z-index:10;background:#0b1220;border-bottom:1px solid var(--line);padding:10px 24px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+nav.top .brand{font-weight:700;font-size:14px;margin-right:12px;color:#fff}
+nav.top a{color:var(--muted);text-decoration:none;font-size:13px;padding:5px 11px;border-radius:7px;white-space:nowrap}
+nav.top a:hover{background:#172033;color:var(--txt)}
+nav.top a.active{background:#334155;color:#fff;font-weight:600}
+main{max-width:1000px;margin:0 auto;padding:32px 28px 96px}
+main img{max-width:100%;height:auto;border-radius:12px;border:1px solid var(--line);display:block;margin:18px auto}
+h1{font-size:26px;border-bottom:2px solid var(--line);padding-bottom:12px;margin-top:8px}
+h2{font-size:20px;border-bottom:1px solid var(--line);padding-bottom:7px;margin-top:38px}
+h3{font-size:16px;margin-top:28px;color:#cbd5e1}h4{font-size:14px;margin-top:20px;color:#cbd5e1}
+a{color:var(--accent)}p,li{font-size:14.5px}
+code{background:#0b1220;padding:2px 7px;border-radius:5px;font-size:13px;font-family:ui-monospace,Menlo,monospace}
+pre{background:#0b1220;border:1px solid var(--line);border-radius:10px;padding:16px;overflow:auto;font-size:12.5px;line-height:1.55}
+pre code{background:none;padding:0}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:13px}
+th,td{border:1px solid var(--line);padding:8px 11px;text-align:left;vertical-align:top}
+th{background:var(--card);font-weight:600}tr:nth-child(even) td{background:#172033}
+blockquote{border-left:4px solid #475569;margin:16px 0;padding:4px 18px;color:var(--muted);background:#131c2e;border-radius:0 8px 8px 0}
+hr{border:none;border-top:1px solid var(--line);margin:32px 0}
+ul,ol{padding-left:24px}li{margin:4px 0}strong{color:#f1f5f9}
+footer{max-width:1000px;margin:0 auto;padding:20px 28px 60px;color:var(--muted);font-size:12px;border-top:1px solid var(--line)}
+</style></head><body>
+<nav class="top"><span class="brand">rdra-analyzer ドメインモデル</span><a href="discovery.html">ディスカバリ</a><a href="event-storming.html" class="active">イベントストーミング</a><a href="bounded-contexts.html">境界づけられたコンテキスト</a><a href="context-map.html">コンテキストマップ</a><a href="aggregates.html">集約</a><a href="domain-events.html">ドメインイベント</a><a href="glossary.html">ユビキタス言語</a><a href="workflows.html">ワークフロー</a><a href="sync.html">モデル⇔実装 Sync</a></nav>
+<main>
+<h1 id="event-storming">Event Storming</h1>
+<blockquote>Phase 2 / DDD — rdra-analyzer 自身のドメイン。Core は「RDRA 要求モデル抽出」（<a href="discovery.html">discovery.md</a> 参照）。</blockquote>
+<h2 id="actor">Actor</h2>
+<ul><li><strong>PdM</strong>（人間）— 解析の起点・業務フローの確定者</li><li><strong>System</strong>（rdra-analyzer）— 抽出・照合・確定/棄却・合成の自動実行者</li><li><strong>loop-e2e</strong>（外部システム）— 実績シナリオの供給元／承認済み業務フローの引き渡し先</li></ul>
+<h2 id="domain-events">Domain Events（時系列・過去形）</h2>
+<h3 id="a">A. 取り込み・解析（インプット系）</h3>
+<ol><li><code>解析が起動された</code> — PdM が対象リポジトリ群を指定</li><li><code>コンテキストが構築された</code> — CLAUDE.md/AGENTS.md/マニフェスト読込</li><li><code>ルート（APIエンドポイント）が抽出された</code></li><li><code>モデル（エンティティ）が抽出された</code></li><li><code>画面が分析された</code> — UI要素・遷移</li><li><code>チェックポイントが保存された</code> — 中間保存（再開可能に）</li></ol>
+<h3 id="b-core">B. 要求モデル抽出（★Core）</h3>
+<p>証拠の連鎖：<strong>APIエンドポイント → Controller 特定 → 使用モデル特定 ＋ 画面突き合わせ → UC候補</strong>。 鎖が切れる（Controller/モデル不明）UC は棄却される。</p>
+<ol><li><code>UC候補が生成された</code> — LLM 駆動</li><li><code>コード証拠と照合された</code> 🎯 ← 正確性の防御線</li><li><code>UCが確定された</code> 🎯 ← 根拠あり（確定者＝System／自動）</li><li><code>UCが棄却された</code> 🎯 ← 根拠なし → <strong>棄却ログへ記録</strong>（破棄しない）</li><li><code>関連情報が再導出された</code>（enrich）🎯 ← 決定的紐付け。画面↔エンドポイント照合を含む</li></ol>
+<h3 id="c-reconcile">C. 外部実績の突き合わせ（reconcile）</h3>
+<ol><li><code>実績シナリオが取り込まれた</code> — loop-e2e</li><li><code>棄却UCが実績で救済された</code> 🎯 ← 「実績由来」確定</li><li><code>新規UCが実績から生成された</code> — <code>UC-LE-NNN</code></li><li><code>コードと実績の矛盾が検出された</code> 🎯 ← <strong>コードを真</strong>・要調査フラグ</li></ol>
+<h3 id="d">D. モデル合成・可視化（アウトプット系）</h3>
+<ol><li><code>システム境界が特定された</code> — 接点（画面）×起点（APIエンドポイント）の対応から</li><li><code>情報モデルが生成された</code></li><li><code>状態遷移が生成された</code></li><li><code>ビジネスポリシーが生成された</code></li><li><code>CRUDギャップが分析された</code></li><li><code>ビューワーが生成された</code></li></ol>
+<h3 id="e-pdm">E. 業務フロー協働（PdM 承認ループ）</h3>
+<p>業務フローは「コードから想定」までは自動だが、<strong>最後は PdM が承認して確定</strong>する。</p>
+<ol><li><code>業務フローが想定された</code> — 確定 UC 群から業務の流れを推定（自動）</li><li><code>業務フローがレビューされた</code> — PdM</li><li><code>業務フローにフィードバックされた</code> — PdM（→ 再想定へ差し戻し）</li><li><code>業務フローが再想定された</code> — System（自動で作り直す）</li><li><code>業務フローが編集された</code> — PdM（手で微調整）</li><li><code>業務フローが承認された</code> ✅ — PdM（＝業務フロー確定）</li><li><code>承認済み業務フローが引き渡された</code> — → loop-e2e（テスト作成・実行は委譲）</li></ol>
+<h2 id="command-actor-aggregate">Command / Actor / Aggregate マトリクス</h2>
+<table><thead><tr><th>#</th><th>Actor</th><th>Command</th><th>Aggregate</th><th>→ Event</th></tr></thead><tbody><tr><td>1</td><td>PdM</td><td>解析を起動する</td><td>解析セッション</td><td>解析が起動された</td></tr><tr><td>2</td><td>System</td><td>コンテキストを構築する</td><td>プロジェクトコンテキスト</td><td>コンテキストが構築された</td></tr><tr><td>3</td><td>System</td><td>エンドポイントを抽出する</td><td>APIエンドポイント</td><td>ルートが抽出された</td></tr><tr><td>4</td><td>System</td><td>モデルを抽出する</td><td>エンティティ</td><td>モデルが抽出された</td></tr><tr><td>5</td><td>System</td><td>画面を抽出・分析する</td><td>画面</td><td>画面が分析された</td></tr><tr><td>6</td><td>System</td><td>進捗を保存する</td><td>解析セッション</td><td>チェックポイントが保存された</td></tr><tr><td>7</td><td>System</td><td>UC候補を生成する</td><td>ユースケース</td><td>UC候補が生成された</td></tr><tr><td>8</td><td>System</td><td>コード証拠と照合する</td><td>ユースケース</td><td>照合された</td></tr><tr><td>9</td><td>System</td><td>UCを確定する</td><td>ユースケース</td><td>UCが確定された 🎯</td></tr><tr><td>10</td><td>System</td><td>UCを棄却する</td><td>棄却ログ</td><td>UCが棄却された 🎯</td></tr><tr><td>11</td><td>System</td><td>関連情報を再導出する</td><td>ユースケース／画面</td><td>関連が再導出された（enrich）</td></tr><tr><td>12</td><td>loop-e2e</td><td>実績シナリオを取り込む</td><td>実績シナリオ</td><td>実績が取り込まれた</td></tr><tr><td>13</td><td>System</td><td>棄却UCを実績で救済する</td><td>ユースケース／棄却ログ</td><td>UCが救済された 🎯</td></tr><tr><td>14</td><td>System</td><td>実績から新規UCを起こす</td><td>ユースケース</td><td>新規UCが生成された</td></tr><tr><td>15</td><td>System</td><td>矛盾を検出する</td><td>ユースケース</td><td>矛盾が検出された 🎯（コードを真）</td></tr><tr><td>16</td><td>System</td><td>システム境界を特定する</td><td>システム境界</td><td>境界が特定された</td></tr><tr><td>17</td><td>System</td><td>情報モデル／状態遷移／BPを合成する</td><td>エンティティ等</td><td>各モデルが生成された</td></tr><tr><td>18</td><td>System</td><td>CRUDギャップを分析する</td><td>CRUDギャップ</td><td>ギャップが分析された</td></tr><tr><td>19</td><td>System</td><td>ビューワーを生成する</td><td>ビューワー</td><td>ビューワーが生成された</td></tr><tr><td>20</td><td>System</td><td>業務フローを想定する</td><td>業務フロー</td><td>業務フローが想定された</td></tr><tr><td>21</td><td>PdM</td><td>業務フローをレビューする</td><td>業務フロー</td><td>レビューされた</td></tr><tr><td>22</td><td>PdM</td><td>フィードバックする</td><td>業務フロー</td><td>FBされた → 再想定へ</td></tr><tr><td>23</td><td>System</td><td>業務フローを再想定する</td><td>業務フロー</td><td>再想定された（自動）</td></tr><tr><td>24</td><td>PdM</td><td>業務フローを微調整する</td><td>業務フロー</td><td>編集された（手動）</td></tr><tr><td>25</td><td>PdM</td><td>業務フローを承認する</td><td>業務フロー</td><td>業務フローが承認された ✅</td></tr><tr><td>26</td><td>System</td><td>承認済みフローを引き渡す</td><td>業務フロー</td><td>loop-e2e へ引き渡された</td></tr></tbody></table>
+<h2 id="aggregate">Aggregate 候補</h2>
+<p>解析セッション / APIエンドポイント / エンティティ / 画面 / <strong>ユースケース</strong> / 棄却ログ / 実績シナリオ / <strong>業務フロー</strong> / システム境界 / CRUDギャップ / ビジネスポリシー / 状態遷移 / <strong>矛盾（要調査 / <code>Conflict</code>）← sync #4 で実装、Phase 5 で Aggregate 化を判断</strong></p>
+<h2 id="">発見された問題点・重要な気づき（赤付箋）</h2>
+<ul><li><strong>「確定」には2種類ある</strong>：UC/エンティティ＝コード証拠による自動確定／業務フロー＝PdM 承認による人間確定。確定者の違いがコンテキスト境界を示唆する。</li><li><strong>システム境界は新規生成ではなく既存照合の意味づけ</strong>：<code>enrich</code> の画面↔エンドポイント突き合わせが、副産物としてシステム境界（アクターとシステムの接点）を描いている。</li><li><strong>テスト生成・実行はスコープ外</strong>：このツールの責務は「業務フロー生成＋PdM 承認」まで。テスト作成・E2E 実行は loop-e2e。境界を越えないこと。</li><li><strong>棄却ログは破棄禁止</strong>：Precision 重視で棄却するが、検証フロー（実績救済を含む）の入力として保持する。→ ✅ sync #1 で <code>rejection_log.json</code>（理由＋欠落証拠）として保持実装（<code>analyze --strict</code>）。🟡 実績救済による再昇格の配線は未実装（残課題）。</li></ul>
+<h2 id="analyze-sync">コードベース突き合わせ（<code>--analyze</code> / sync 後）</h2>
+<blockquote>Event Storming のイベント・集約を現状コードへ突き合わせた結果。sync（#1–#4/#6）で<br>4イベント（10 棄却・15 矛盾・16 システム境界・9 確度）が 🔴/🟡 → ✅ になった。</blockquote>
+<h3 id="domain-event">Domain Event → コード（状態）</h3>
+<table><thead><tr><th>#</th><th>イベント</th><th>コード実体</th><th>状態</th></tr></thead><tbody><tr><td>1–6</td><td>解析起動／コンテキスト構築／ルート・モデル抽出／画面分析／チェックポイント保存</td><td><code>analyze</code>・<code>project_context</code>・<code>source_parser</code>・<code>screen_analyzer</code>・<code>_save_parse_checkpoint</code></td><td>✅</td></tr><tr><td>7</td><td>UC候補が生成された</td><td><code>usecase_extractor</code></td><td>✅</td></tr><tr><td>8</td><td>コード証拠と照合された 🎯</td><td>enrich（決定的再導出）＋ #1 <code>has_code_evidence</code>（存在ゲート・opt-in）</td><td>🟡 部分（証拠連鎖の明示検証は未）</td></tr><tr><td>9</td><td>UCが確定された 🎯</td><td>抽出（<code>confidence=confirmed</code> 既定）＋確度ラベル #2</td><td>✅</td></tr><tr><td>10</td><td>UCが棄却された→棄却ログ 🎯</td><td><strong>#1</strong> <code>partition_usecases</code>／<code>rejection_log.json</code>（<code>analyze --strict</code>）</td><td>✅（sync #1, opt-in）</td></tr><tr><td>11</td><td>関連情報が再導出された（enrich） 🎯</td><td><code>enrich</code> cmd</td><td>✅</td></tr><tr><td>12</td><td>実績シナリオが取り込まれた</td><td><code>reconcile</code> cmd</td><td>✅</td></tr><tr><td>13</td><td>棄却UCが実績で救済された 🎯</td><td><code>rejection_log</code> は書くのみ、reconcile は読まない</td><td>🔴 未配線</td></tr><tr><td>14</td><td>新規UCが実績から生成された</td><td><code>_synthesize_usecase</code>（<code>confidence=inferred</code>）</td><td>✅</td></tr><tr><td>15</td><td>コードと実績の矛盾が検出された 🎯</td><td><strong>#4</strong> <code>detect_conflicts</code>／<code>conflict_report.json</code></td><td>✅（sync #4）</td></tr><tr><td>16</td><td>システム境界が特定された</td><td><strong>#3</strong> <code>rdra/system_boundary.py</code>（<code>system_boundary.md</code>）</td><td>✅（sync #3）</td></tr><tr><td>17–21</td><td>情報モデル／状態遷移／BP／CRUDギャップ／ビューワー</td><td>各ジェネレータ（<code>rdra/</code>・<code>gap/</code>・<code>viewer</code>）</td><td>✅</td></tr><tr><td>22–28</td><td>業務フロー協働（想定→レビュー→FB→再想定→編集→承認→引き渡し）</td><td><code>workflow/</code>：ES（fold）＋状態機械＋guard＋<code>rdra flow</code> CLI。各イベントを JSONL 追記、承認は PdM のみ</td><td>✅ 実装済み（sync #5）</td></tr></tbody></table>
+<h3 id="aggregate">Aggregate → コード</h3>
+<table><thead><tr><th>Aggregate</th><th>コード</th><th>状態</th></tr></thead><tbody><tr><td>解析セッション</td><td>checkpoint dict（<code>completed_repos</code>/<code>phase</code>）</td><td>🟡 暗黙（専用型なし）</td></tr><tr><td>APIエンドポイント／エンティティ／画面</td><td><code>ParsedRoute</code>／<code>ParsedModel</code>・<code>EntityOperation</code>(確度#2)／<code>ParsedPage</code></td><td>✅</td></tr><tr><td>ユースケース</td><td><code>Usecase</code>（確度 #2）</td><td>✅</td></tr><tr><td>棄却ログ</td><td><code>RejectedUsecase</code>（#1）</td><td>✅ NEW</td></tr><tr><td>実績シナリオ</td><td><code>OperationScenario</code>（<code>scenario_builder</code>）</td><td>✅</td></tr><tr><td>矛盾（要調査）</td><td><code>Conflict</code>（#4）※モデルに Aggregate 未記載の新概念</td><td>✅ NEW</td></tr><tr><td>システム境界</td><td>生成器のみ（UC由来の派生図、専用 Aggregate なし）</td><td>🟡</td></tr><tr><td>CRUDギャップ／ビジネスポリシー／状態遷移</td><td>各ジェネレータ出力</td><td>✅</td></tr><tr><td>業務フロー</td><td>なし</td><td>🔴（#5）</td></tr></tbody></table>
+<h3 id="">残差・違反・命名ズレ</h3>
+<ul><li><strong>🔴 13 救済フロー未配線</strong>: 棄却ログを reconcile が入力に再昇格する経路が無い（openQuestion 既出）。</li><li><strong>🔴 22–28 業務フロー協働</strong>: 丸ごと未実装。<strong>sync #5（deferred, Phase 5/9–11 が前提）</strong>。</li><li><strong>🟡 8 照合</strong>: 「APIエンドポイント→Controller→モデル＋画面」の証拠連鎖を検証する単一ステップが無く、抽出＋enrich＋#1 に分散。</li><li><strong>既定挙動は Recall 寄り</strong>: 棄却(#1)・矛盾(#4)は opt-in / 別レポートで、デフォルトでは確定モデルを変えない（モデルは Precision を to-be とする）。</li><li><strong>構造ズレ</strong>: コードの継ぎ目（Source/UseCase/Scenario/Reconciliation）は A–E イベント群とズレ。<strong>sync #7（deferred, Phase 4 mapping 前提）</strong>。新規 <code>Conflict</code> は Aggregate 候補へ追記すべき。</li></ul>
+<blockquote>残差はすべて sync 台帳（<a href="sync.html">sync.md</a>）に追跡済み。新規の取り込み先は <code>Conflict</code> Aggregate の明示化（→ Phase 5）。</blockquote>
+<h2 id="bounded-context-phase-3">Bounded Context 候補（→ Phase 3）</h2>
+<ul><li><strong>抽出コンテキスト</strong>（#1–11）— コードから証拠ベースで UC/エンティティを確定。★Core</li><li><strong>実績調停コンテキスト</strong>（#12–15）— loop-e2e 実績の突き合わせ・救済・矛盾検出（「コードを真」の調停）</li><li><strong>業務フロー協働コンテキスト</strong>（#20–26）— PdM 承認ループ＋loop-e2e 引き渡し（確定者＝人間）</li><li><strong>モデル合成・可視化コンテキスト</strong>（#16–19）— 抽出物を RDRA 図・境界・ギャップへ合成し見せる</li></ul>
+<h2 id="">未解決の問い</h2>
+<ul><li>「棄却ログ」は独立 Aggregate か、ユースケースの状態（rejected）か — Phase 5 で決定。</li><li>「実績シナリオ」「実績調停」は独立 BC か、抽出 BC の一部か — Phase 3 で決定。</li><li>システム境界 Aggregate と画面・エンドポイントの所有関係 — Phase 5 で決定。</li></ul>
+</main>
+<footer>rdra-analyzer ドメインモデル &nbsp;|&nbsp; source: <code>docs/domain/event-storming.md</code> &nbsp;|&nbsp; generated by /ddd publish</footer>
+</body></html>
