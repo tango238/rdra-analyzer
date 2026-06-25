@@ -1,6 +1,6 @@
 {
-  "currentPhase": "workflows",
-  "completedPhases": ["discover", "storming", "contexts", "mapping", "aggregates", "events", "workflows"],
+  "currentPhase": "types",
+  "completedPhases": ["discover", "storming", "contexts", "mapping", "aggregates", "events", "workflows", "types"],
   "lastUpdated": "2026-06-25",
   "analyzeApplied": ["contexts", "storming", "contexts-resync"],
   "openQuestions": [
