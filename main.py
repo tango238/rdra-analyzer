@@ -53,6 +53,10 @@ app = typer.Typer(
 )
 console = Console()
 
+# 業務フロー協働 BC（③）— PdM 承認ループ（sync #5）
+flow_app = typer.Typer(help="業務フロー承認ループ: 確定UCから想定→PdM承認→loop-e2e引き渡し")
+app.add_typer(flow_app, name="flow")
+
 
 def _get_config():
     """設定を取得して検証する"""
@@ -1551,6 +1555,111 @@ def _load_analysis_result(data: dict):
     ]
 
     return usecases, scenarios
+
+
+def _flow_base_dir(output_dir: Optional[Path]) -> Path:
+    config = _get_config()
+    return Path(output_dir or config.output_dir) / "usecases"
+
+
+def _report_flow(result, success_msg: str) -> None:
+    """業務フローコマンドの Result を表示する（workflows.md の UI マッピング）。"""
+    from workflow.result import Ok
+
+    if isinstance(result, Ok):
+        console.print(f"[green]{success_msg}[/green]  -> 発行イベント: {result.value.kind}")
+        return
+    err = result.error
+    name = type(err).__name__
+    messages = {
+        "NotPdM": "承認/FB/編集は PdM のみ操作できます",
+        "IllegalTransition": "現在の状態ではその操作はできません",
+        "NoConfirmedUsecases": "確定UCがありません。先に 'analyze' を確定してください",
+        "UnknownUsecase": "指定されたUCが確定モデルにありません",
+        "NotApproved": "引き渡しは承認後のみ可能です",
+        "LoopE2eUnavailable": "loop-e2e へ接続できません。時間を置いて再試行してください",
+    }
+    console.print(f"[red]失敗: {messages.get(name, name)}[/red] ({err})")
+    raise typer.Exit(1)
+
+
+@flow_app.command("propose")
+def flow_propose(
+    flow_id: str = typer.Argument(..., help="業務フローID（例: BF-1）"),
+    uc: Optional[list[str]] = typer.Option(None, "--uc", help="対象UC ID（省略時は確定UC全件）"),
+    output_dir: Optional[Path] = typer.Option(None, "--output", "-o", help="出力ディレクトリ"),
+):
+    """確定UC群から業務フローを想定する（System）。"""
+    from workflow import service
+
+    base = _flow_base_dir(output_dir)
+    analysis_path = base / "analysis_result.json"
+    if not analysis_path.exists():
+        console.print("[red]analysis_result.json が見つかりません。先に 'analyze' を実行してください。[/red]")
+        raise typer.Exit(1)
+    analysis = json.loads(analysis_path.read_text(encoding="utf-8"))
+    confirmed = service.load_confirmed_uc_ids(analysis)
+    uc_ids = tuple(uc) if uc else tuple(sorted(confirmed))
+    _report_flow(service.propose(base, flow_id, uc_ids, confirmed), f"業務フロー {flow_id} を想定（UC {len(uc_ids)}件）")
+
+
+@flow_app.command("review")
+def flow_review(
+    flow_id: str = typer.Argument(...),
+    actor: str = typer.Option("PdM", "--actor"),
+    output_dir: Optional[Path] = typer.Option(None, "--output", "-o"),
+):
+    """PdM がレビューに着手する。"""
+    from workflow import service
+    _report_flow(service.review(_flow_base_dir(output_dir), flow_id, actor), f"{flow_id} をレビュー")
+
+
+@flow_app.command("feedback")
+def flow_feedback(
+    flow_id: str = typer.Argument(...),
+    text: str = typer.Option(..., "--text", "-t", help="差し戻し理由"),
+    actor: str = typer.Option("PdM", "--actor"),
+    output_dir: Optional[Path] = typer.Option(None, "--output", "-o"),
+):
+    """PdM が差し戻す（→ 再想定待ち）。"""
+    from workflow import service
+    _report_flow(service.feedback(_flow_base_dir(output_dir), flow_id, actor, text), f"{flow_id} に FB")
+
+
+@flow_app.command("approve")
+def flow_approve(
+    flow_id: str = typer.Argument(...),
+    actor: str = typer.Option("PdM", "--actor"),
+    output_dir: Optional[Path] = typer.Option(None, "--output", "-o"),
+):
+    """PdM が承認する（＝業務フロー確定）。"""
+    from workflow import service
+    _report_flow(service.approve(_flow_base_dir(output_dir), flow_id, actor), f"{flow_id} を承認")
+
+
+@flow_app.command("handoff")
+def flow_handoff(
+    flow_id: str = typer.Argument(...),
+    output_dir: Optional[Path] = typer.Option(None, "--output", "-o"),
+):
+    """承認済みフローを loop-e2e へ引き渡す（PL 成果物を出力）。"""
+    from workflow import service
+    _report_flow(service.handoff(_flow_base_dir(output_dir), flow_id), f"{flow_id} を loop-e2e へ引き渡し")
+
+
+@flow_app.command("status")
+def flow_status(
+    flow_id: str = typer.Argument(...),
+    output_dir: Optional[Path] = typer.Option(None, "--output", "-o"),
+):
+    """業務フローの現在状態を表示する。"""
+    from workflow import service
+
+    state = service.current_state(_flow_base_dir(output_dir), flow_id)
+    if state is None:
+        console.print(f"[yellow]{flow_id} は存在しません[/yellow]")
+        raise typer.Exit(0)
+    console.print(f"  {flow_id}: 状態 = {state.kind}")
 
 
 if __name__ == "__main__":
