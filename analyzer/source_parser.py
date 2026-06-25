@@ -11,6 +11,8 @@ import re
 from pathlib import Path
 from dataclasses import dataclass, field, fields as _dc_fields
 
+from confidence import CONFIRMED, Confidence
+
 
 def from_checkpoint_dict(cls, d: dict):
     """checkpoint の dict から既知フィールドのみで dataclass を構築する。
@@ -93,6 +95,7 @@ class EntityOperation:
     source_class: str          # 操作が記述されたクラス名 (例: "OrderService")
     source_method: str         # 操作が記述されたメソッド名 (例: "createOrder")
     call_chain: list[str] = field(default_factory=list)  # コール階層
+    confidence: Confidence = CONFIRMED  # 確度ラベル（静的抽出=confirmed）。sync #2
 
 
 @dataclass

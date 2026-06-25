@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Workflows — ワークフロー設計</title><style>:root{--bg:#0f172a;--card:#1e293b;--line:#334155;--txt:#e2e8f0;--muted:#94a3b8;--accent:#7dd3fc}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--txt);font-family:-apple-system,'Hiragino Kaku Gothic ProN','Segoe UI',sans-serif;line-height:1.75}
+nav.top{position:sticky;top:0;z-index:10;background:#0b1220;border-bottom:1px solid var(--line);padding:10px 24px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+nav.top .brand{font-weight:700;font-size:14px;margin-right:12px;color:#fff}
+nav.top a{color:var(--muted);text-decoration:none;font-size:13px;padding:5px 11px;border-radius:7px;white-space:nowrap}
+nav.top a:hover{background:#172033;color:var(--txt)}
+nav.top a.active{background:#334155;color:#fff;font-weight:600}
+main{max-width:1000px;margin:0 auto;padding:32px 28px 96px}
+main img{max-width:100%;height:auto;border-radius:12px;border:1px solid var(--line);display:block;margin:18px auto}
+h1{font-size:26px;border-bottom:2px solid var(--line);padding-bottom:12px;margin-top:8px}
+h2{font-size:20px;border-bottom:1px solid var(--line);padding-bottom:7px;margin-top:38px}
+h3{font-size:16px;margin-top:28px;color:#cbd5e1}h4{font-size:14px;margin-top:20px;color:#cbd5e1}
+a{color:var(--accent)}p,li{font-size:14.5px}
+code{background:#0b1220;padding:2px 7px;border-radius:5px;font-size:13px;font-family:ui-monospace,Menlo,monospace}
+pre{background:#0b1220;border:1px solid var(--line);border-radius:10px;padding:16px;overflow:auto;font-size:12.5px;line-height:1.55}
+pre code{background:none;padding:0}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:13px}
+th,td{border:1px solid var(--line);padding:8px 11px;text-align:left;vertical-align:top}
+th{background:var(--card);font-weight:600}tr:nth-child(even) td{background:#172033}
+blockquote{border-left:4px solid #475569;margin:16px 0;padding:4px 18px;color:var(--muted);background:#131c2e;border-radius:0 8px 8px 0}
+hr{border:none;border-top:1px solid var(--line);margin:32px 0}
+ul,ol{padding-left:24px}li{margin:4px 0}strong{color:#f1f5f9}
+footer{max-width:1000px;margin:0 auto;padding:20px 28px 60px;color:var(--muted);font-size:12px;border-top:1px solid var(--line)}
+</style></head><body>
+<nav class="top"><span class="brand">rdra-analyzer ドメインモデル</span><a href="discovery.html">ディスカバリ</a><a href="event-storming.html">イベントストーミング</a><a href="bounded-contexts.html">境界づけられたコンテキスト</a><a href="context-map.html">コンテキストマップ</a><a href="aggregates.html">集約</a><a href="domain-events.html">ドメインイベント</a><a href="glossary.html">ユビキタス言語</a><a href="workflows.html" class="active">ワークフロー</a><a href="sync.html">モデル⇔実装 Sync</a></nav>
+<main>
+<h1 id="workflows">Workflows — ワークフロー設計</h1>
+<p>生成日: 2026-06-25 前提フェーズ: storming ✓ / aggregates ✓ / events ✓ / mapping ✓（glossary 未・末尾フィードバック参照） 方式: DMMF（型駆動・パイプライン）。コードは書かない＝型駆動の設計ドラフト。</p>
+<h2 id="">実装対象ワークフロー一覧（優先度順）</h2>
+<table><thead><tr><th>#</th><th>名前</th><th>Bounded Context</th><th>優先度</th><th>状態</th><th>理由</th></tr></thead><tbody><tr><td>1</td><td><strong>業務フロー承認ループ</strong></td><td>③ 業務フロー協働</td><td>高</td><td>🔴 未実装（#5）</td><td>唯一の未実装・ES 的・PdM 承認（再生成不可のドメイン価値）</td></tr><tr><td>—</td><td>抽出パイプライン</td><td>① 要求モデル抽出</td><td>（済）</td><td>✅</td><td>実装済み（#1/#2 含む）。詳細は後追い <code>--analyze</code></td></tr><tr><td>—</td><td>実績調停パイプライン</td><td>② 実績調停</td><td>（済）</td><td>✅</td><td>実装済み（#4 含む・救済は未）。詳細は後追い <code>--analyze</code></td></tr></tbody></table>
+<p>本フェーズは <strong>#1 業務フロー承認ループのみ</strong> を詳細設計（ユーザー選択）。</p>
+<hr>
+<h2 id="workflow-1-bc">Workflow 1: 業務フロー承認ループ（③ 業務フロー協働 BC）</h2>
+<h3 id="">概要</h3>
+<ul><li><strong>発動契機</strong>: 確定 UC 群（<code>UsecaseConfirmed</code> 済み）が揃った後、<code>flow propose</code> 操作で想定を起動。以降は PdM 操作（review/feedback/edit/approve/handoff）と System 再想定の往復。</li><li><strong>最終出力</strong>: <code>Result&lt;BusinessFlowEvent, BusinessFlowError&gt;</code>。成功の終端は <code>ApprovedFlowHandedOff</code>（loop-e2e へ PL 引き渡し）。</li><li><strong>性質</strong>: <strong>長時間実行・人間 in-the-loop・複数セッションにまたがる</strong>（= Saga）。状態は <strong>Event Sourcing</strong>（イベント列を <code>fold</code> して復元）。</li><li><strong>失敗カテゴリ</strong>: 状態機械違反（不正遷移）/ 権限違反（PdM 以外）/ 参照エラー（確定 UC 不在）/ 技術例外（ストア I/O・loop-e2e 不達）。</li></ul>
+<h3 id="">ステージ（中間型 ＝ 状態）</h3>
+<p>状態機械なので <strong>ステージ＝状態型</strong>。DMMF「信頼水準が上がる」を状態遷移にマップし、<strong>各状態型が許す操作だけを公開</strong>して不正状態を表現不能にする。</p>
+<pre><code>ProposedFlow → ReviewingFlow ⇄ NeedsRevisionFlow → ApprovedFlow → HandedOffFlow
+                    │                                   ▲
+                    └──────────── approve ──────────────┘</code></pre>
+<table><thead><tr><th>ステージ（状態型）</th><th>この型が保証すること</th><th>公開操作（許す遷移）</th></tr></thead><tbody><tr><td><code>ProposedFlow</code></td><td>System が確定 UC 群から想定済み。<code>uc_ids</code> は全て確定(confirmed)UC。未レビュー</td><td>review / edit</td></tr><tr><td><code>ReviewingFlow</code></td><td>PdM がレビュー着手済み</td><td>feedback / edit / <strong>approve</strong></td></tr><tr><td><code>NeedsRevisionFlow</code></td><td>PdM が FB 済み。<code>feedback_history</code> に理由。System 再想定待ち</td><td>rePropose(System) / edit</td></tr><tr><td><code>ApprovedFlow</code></td><td><strong>PdM 承認済み</strong>。<code>approver</code> 記録。引き渡し可能</td><td><strong>handOff のみ</strong></td></tr><tr><td><code>HandedOffFlow</code></td><td>loop-e2e へ引き渡し済み（終端）</td><td>（なし）</td></tr></tbody></table>
+<blockquote><strong>不正状態を表現不能に</strong>: <code>handOff</code> は <code>ApprovedFlow</code> 型にしか生えない＝「未承認の引き渡し」がコンパイル時に不能。<code>approve</code> は <code>NeedsRevisionFlow</code> には生えない（先に edit/reProposeで Reviewing へ戻す）。</blockquote>
+<h3 id="">ステップ（コマンド ＝ 関数）</h3>
+<p>各コマンドは <code>(現状態, 入力, 依存) → Result&lt;Event, Error&gt;</code>。状態は <code>fold(events)</code> で前段再構築。</p>
+<h4 id="step-1-proposeflow">Step 1: proposeFlow</h4>
+<ul><li>入力: <code>uc_ids[]</code> / 出力: <code>Result&lt;BusinessFlowProposed, ProposeError&gt;</code></li><li>責務: 確定 UC 群から業務フローを想定（入力ゲート）</li><li>依存: <code>LoadConfirmedUsecases</code></li><li>副作用: read-only（UC 照会）＋末端で append</li><li>エラー: <code>NoConfirmedUsecases</code> / <code>UnknownUsecase(ucId)</code> / 指定 UC が confirmed でない</li><li>発行 Event: <code>BusinessFlowProposed</code></li></ul>
+<h4 id="step-2-reviewflow">Step 2: reviewFlow</h4>
+<ul><li>入力: <code>ProposedFlow, by</code> / 出力: <code>Result&lt;BusinessFlowReviewed, TransitionError|AuthError&gt;</code></li><li>責務: PdM レビュー着手 / 依存: なし / 副作用: none（＋append）</li><li>発行 Event: <code>BusinessFlowReviewed</code></li></ul>
+<h4 id="step-3-givefeedback">Step 3: giveFeedback</h4>
+<ul><li>入力: <code>ReviewingFlow, feedback, actor</code> / 出力: <code>Result&lt;BusinessFlowFeedbackGiven, AuthError&gt;</code></li><li>責務: 差し戻し理由を記録 → NeedsRevision へ / guard: <strong>actor=PdM</strong></li><li>発行 Event: <code>BusinessFlowFeedbackGiven</code>（Enrichment: feedback 同梱）</li></ul>
+<h4 id="step-4-reproposeflow">Step 4: reProposeFlow</h4>
+<ul><li>入力: <code>NeedsRevisionFlow, 依存</code> / 出力: <code>Result&lt;BusinessFlowReProposed, ProposeError&gt;</code></li><li>責務: System が FB を反映して再想定（自動）/ 依存: <code>LoadConfirmedUsecases</code></li><li>発行 Event: <code>BusinessFlowReProposed</code></li></ul>
+<h4 id="step-5-editflow">Step 5: editFlow</h4>
+<ul><li>入力: <code>ProposedFlow|ReviewingFlow|NeedsRevisionFlow, edits, actor</code> / 出力: <code>Result&lt;BusinessFlowEdited, AuthError&gt;</code></li><li>責務: PdM 手動微調整 / guard: <strong>actor=PdM</strong></li><li>発行 Event: <code>BusinessFlowEdited</code></li></ul>
+<h4 id="step-6-approveflow">Step 6: approveFlow 🎯</h4>
+<ul><li>入力: <code>ReviewingFlow, actor</code> / 出力: <code>Result&lt;BusinessFlowApproved, AuthError|TransitionError&gt;</code></li><li>責務: PdM 承認＝業務フロー確定 / <strong>guard: actor=PdM（不変条件）・状態が Reviewing</strong></li><li>副作用: none（＋append）/ 発行 Event: <code>BusinessFlowApproved</code>（approver 記録）</li></ul>
+<h4 id="step-7-handoff">Step 7: handOff 🎯</h4>
+<ul><li>入力: <code>ApprovedFlow, 依存</code> / 出力: <code>Result&lt;ApprovedFlowHandedOff, HandOffError&gt;</code></li><li>責務: 承認済みフローを loop-e2e へ引き渡し（出力ゲート）/ <strong>guard: 状態が Approved（因果整合）</strong></li><li>依存: <code>HandOffToLoopE2e</code>（PL 送信）/ 副作用: <strong>send-message（loop-e2e）</strong></li><li>発行 Event: <code>ApprovedFlowHandedOff</code></li></ul>
+<h3 id="">依存（ポート一覧）</h3>
+<p>依存は<strong>関数引数で渡す</strong>（DMMF・DI コンテナを仮定しない）。</p>
+<table><thead><tr><th>名前</th><th>型シグネチャ</th><th>実装元</th><th>同期性</th><th>使うステップ</th></tr></thead><tbody><tr><td><code>LoadConfirmedUsecases</code></td><td><code>() → list[Usecase]</code></td><td>① Shared Kernel（<code>analysis_result.json</code>）</td><td>sync（file）</td><td>proposeFlow / reProposeFlow</td></tr><tr><td><code>LoadFlowEvents</code></td><td><code>FlowId → list[BusinessFlowEvent]</code></td><td>workflow store（JSONL）</td><td>sync</td><td>全ステップ（fold 前段）</td></tr><tr><td><code>AppendFlowEvent</code></td><td><code>(FlowId, BusinessFlowEvent) → unit</code></td><td>workflow store（append-only）</td><td>sync</td><td>全ステップ（末端）</td></tr><tr><td><code>HandOffToLoopE2e</code></td><td><code>ApprovedFlow → Result&lt;unit, HandOffError&gt;</code></td><td>loop-e2e（PL outbound）</td><td>async</td><td>handOff</td></tr><tr><td><code>Now</code></td><td><code>() → Timestamp</code></td><td>clock</td><td>—</td><td>全ステップ（occurredOn）</td></tr></tbody></table>
+<blockquote><code>LoadConfirmedUsecases</code> は ② 救済フロー等と共通化候補（① Shared Kernel reader）。<code>LoadFlowEvents</code>/<code>AppendFlowEvent</code> が ES の心臓。</blockquote>
+<h3 id="">エラーカタログ</h3>
+<pre><code>BusinessFlowError =
+  | Propose      of ProposeError
+  | Transition   of TransitionError
+  | Auth         of AuthError
+  | HandOff      of HandOffError
+
+ProposeError =
+  | NoConfirmedUsecases
+  | UnknownUsecase   of ucId: str
+  | UsecaseNotConfirmed of ucId: str
+
+TransitionError =
+  | IllegalTransition of from: Status, command: str   # 状態機械違反
+
+AuthError =
+  | NotPdM of actor: str                              # approve/feedback/edit は PdM のみ
+
+HandOffError =
+  | NotApproved        of Status                       # 承認前の引き渡し（型で原則排除・防御的に二重化）
+  | LoopE2eUnavailable                                 # 技術例外寄り</code></pre>
+<p>ドメインエラー vs 技術例外の仕分け: <code>Propose/Transition/Auth</code> はドメインエラー（UI に出す）。<code>LoopE2eUnavailable</code> は技術例外（リトライ/ログ）。</p>
+<p>UI 表示マッピング（Phase 11 / UI 項目への入力）:</p>
+<table><thead><tr><th>エラー</th><th>UI 反応</th></tr></thead><tbody><tr><td><code>NotPdM</code></td><td>承認/FB/編集ボタンを非活性、「PdM のみ操作可能」</td></tr><tr><td><code>IllegalTransition</code></td><td>現状態で不可の操作ボタンを非活性</td></tr><tr><td><code>NoConfirmedUsecases</code></td><td>「確定 UC がありません。先に解析を確定してください」</td></tr><tr><td><code>LoopE2eUnavailable</code></td><td>「loop-e2e へ接続できません。時間を置いて再試行」</td></tr></tbody></table>
+<h3 id="">発行イベント</h3>
+<table><thead><tr><th>ステップ</th><th>発行 Event</th><th>条件</th><th>購読側</th></tr></thead><tbody><tr><td>approveFlow 成功</td><td><code>BusinessFlowApproved</code></td><td>actor=PdM ＆ Reviewing</td><td>自 BC（引き渡し前提）</td></tr><tr><td>handOff 成功</td><td><code>ApprovedFlowHandedOff</code></td><td>Approved のみ</td><td><strong>loop-e2e（PL）</strong></td></tr><tr><td>各コマンド成功</td><td>対応 Event</td><td>guard 通過時</td><td>ES ストア（append → fold 対象）</td></tr></tbody></table>
+<h3 id="i-o-at-the-edges">副作用の配置（I/O at the edges）</h3>
+<pre><code>[store] → LoadFlowEvents(read) → fold(pure) → command guard(pure) → Result&lt;Event&gt;
+                                                          │
+                                        成功 → AppendFlowEvent(write) ┐
+                                        handOff → HandOffToLoopE2e(send)┘ → [外界]</code></pre>
+<ul><li><strong>純粋</strong>: <code>fold</code>（状態復元）・各コマンドの guard 判定・Event 組み立て。</li><li><strong>副作用は両端のみ</strong>: 先頭 <code>LoadFlowEvents</code>（read）、末端 <code>AppendFlowEvent</code>（write）/ <code>HandOffToLoopE2e</code>（send）。</li><li>ES の <code>fold</code> が純粋なので、状態遷移ロジックはテストで I/O 不要（イベント列を渡すだけ）。</li></ul>
+<h3 id="">関係するワークフロー</h3>
+<ul><li><strong>上流</strong>: 抽出パイプライン（① <code>UsecaseConfirmed</code> → 確定 UC 群が proposeFlow の入力）。Event/Shared Kernel 経由（直接呼び出しでない）。</li><li><strong>下流</strong>: loop-e2e（<code>ApprovedFlowHandedOff</code> → PL）。テスト作成・実行は委譲＝BC 境界を越えない。</li><li><strong>Saga 性</strong>: 長時間・人間 in-loop・複数セッション。補償は「フロー破棄/差し替え」（MVP 外）。</li></ul>
+<h3 id="">未解決の問い</h3>
+<ul><li>ES の保存先（<code>output/usecases/business_flows/&lt;flowId&gt;.jsonl</code> 想定）と <code>fold</code> の置き場（<code>workflow/</code> 新パッケージ＝#7 構成と一致）。</li><li><code>edit</code> が複数状態（Proposed/Reviewing/NeedsRevision）で起きる → 状態型ごとに <code>editFlow</code> を持たせるか、共通化するか（Phase 10 型設計）。</li><li>承認操作の UI（CLI 対話 / ④ ビューワー）— openQuestion 継続（Phase 11）。</li><li>補償（承認後に確定 UC が変わった場合のフロー無効化）は MVP 外 → 残課題。</li></ul>
+<hr>
+<h2 id="">ワークフロー間の関係図</h2>
+<pre><code>抽出パイプライン(①) --[UsecaseConfirmed / Shared Kernel]--&gt; 業務フロー承認ループ(③)
+業務フロー承認ループ(③) --[ApprovedFlowHandedOff / PL]--&gt; loop-e2e(外部)
+実績調停(②) --[Shared Kernel 書き戻し]--&gt; 抽出パイプライン(①)</code></pre>
+<h2 id="">共通パターンの識別</h2>
+<ul><li><strong>ES fold は ③ 固有</strong>（① ② は再生成 or 上書き）。<code>workflow/</code> に閉じる。</li><li><strong><code>LoadConfirmedUsecases</code>（① Shared Kernel reader）は ②救済 と共通化候補</strong> → <code>shared/</code> 配置（#7）。</li><li><strong>guard（状態機械・権限）は純粋関数</strong>＝テスト先行しやすい（sync 実装時 TDD の起点）。</li></ul>
+<h2 id="">フィードバック（元フェーズへの差し戻し提案）</h2>
+<table><thead><tr><th>発見</th><th>差し戻し先</th><th>内容</th></tr></thead><tbody><tr><td>中間型名 <code>ProposedFlow</code>/<code>ReviewingFlow</code>/<code>NeedsRevisionFlow</code>/<code>ApprovedFlow</code>/<code>HandedOffFlow</code> が用語集に無い</td><td>Phase 8 (glossary)</td><td>状態型を正式用語として登録</td></tr><tr><td><code>Status</code>（proposed/reviewing/needs_revision/approved/handed_off）の値域</td><td>Phase 10 (types)</td><td>Literal 型＋状態ごとの専用型で「不正状態を表現不能」に</td></tr><tr><td><code>edit</code> の複数状態対応</td><td>Phase 5 (aggregates)</td><td>BusinessFlow の操作粒度を再確認（状態ごとの edit か共通か）</td></tr><tr><td><code>BusinessFlowError</code> 階層は events に未記載</td><td>Phase 6 (events)</td><td>エラーは Event でなく Result。events.md は変更不要（確認のみ）</td></tr></tbody></table>
+<p>→ 次は <strong>Phase 10 (types)</strong> で上記ステージ型・<code>Result</code>・<code>Status</code>・エラー階層を「コンパイル可能・不正状態を表現不能」な型へ落とすのが自然。その後 <strong>sync</strong> で <code>workflow/</code> を TDD 実装（<code>fold</code> の純粋性・guard の不変条件をテスト先行）。</p>
+</main>
+<footer>rdra-analyzer ドメインモデル &nbsp;|&nbsp; source: <code>docs/domain/workflows.md</code> &nbsp;|&nbsp; generated by /ddd publish</footer>
+</body></html>

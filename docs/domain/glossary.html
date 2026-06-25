@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ユビキタス言語（用語集）</title><style>:root{--bg:#0f172a;--card:#1e293b;--line:#334155;--txt:#e2e8f0;--muted:#94a3b8;--accent:#7dd3fc}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--txt);font-family:-apple-system,'Hiragino Kaku Gothic ProN','Segoe UI',sans-serif;line-height:1.75}
+nav.top{position:sticky;top:0;z-index:10;background:#0b1220;border-bottom:1px solid var(--line);padding:10px 24px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+nav.top .brand{font-weight:700;font-size:14px;margin-right:12px;color:#fff}
+nav.top a{color:var(--muted);text-decoration:none;font-size:13px;padding:5px 11px;border-radius:7px;white-space:nowrap}
+nav.top a:hover{background:#172033;color:var(--txt)}
+nav.top a.active{background:#334155;color:#fff;font-weight:600}
+main{max-width:1000px;margin:0 auto;padding:32px 28px 96px}
+main img{max-width:100%;height:auto;border-radius:12px;border:1px solid var(--line);display:block;margin:18px auto}
+h1{font-size:26px;border-bottom:2px solid var(--line);padding-bottom:12px;margin-top:8px}
+h2{font-size:20px;border-bottom:1px solid var(--line);padding-bottom:7px;margin-top:38px}
+h3{font-size:16px;margin-top:28px;color:#cbd5e1}h4{font-size:14px;margin-top:20px;color:#cbd5e1}
+a{color:var(--accent)}p,li{font-size:14.5px}
+code{background:#0b1220;padding:2px 7px;border-radius:5px;font-size:13px;font-family:ui-monospace,Menlo,monospace}
+pre{background:#0b1220;border:1px solid var(--line);border-radius:10px;padding:16px;overflow:auto;font-size:12.5px;line-height:1.55}
+pre code{background:none;padding:0}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:13px}
+th,td{border:1px solid var(--line);padding:8px 11px;text-align:left;vertical-align:top}
+th{background:var(--card);font-weight:600}tr:nth-child(even) td{background:#172033}
+blockquote{border-left:4px solid #475569;margin:16px 0;padding:4px 18px;color:var(--muted);background:#131c2e;border-radius:0 8px 8px 0}
+hr{border:none;border-top:1px solid var(--line);margin:32px 0}
+ul,ol{padding-left:24px}li{margin:4px 0}strong{color:#f1f5f9}
+footer{max-width:1000px;margin:0 auto;padding:20px 28px 60px;color:var(--muted);font-size:12px;border-top:1px solid var(--line)}
+</style></head><body>
+<nav class="top"><span class="brand">rdra-analyzer ドメインモデル</span><a href="discovery.html">ディスカバリ</a><a href="event-storming.html">イベントストーミング</a><a href="bounded-contexts.html">境界づけられたコンテキスト</a><a href="context-map.html">コンテキストマップ</a><a href="aggregates.html">集約</a><a href="domain-events.html">ドメインイベント</a><a href="glossary.html" class="active">ユビキタス言語</a><a href="workflows.html">ワークフロー</a><a href="sync.html">モデル⇔実装 Sync</a></nav>
+<main>
+<h1 id="">ユビキタス言語（用語集）</h1>
+<blockquote>Phase 8 / DDD — 全フェーズで蓄積した用語を BC ごとに整理。英名は Phase 10 型／コード実体と対応。<br>同一用語が文脈で意味を変えるもの（確定／検証／ユースケース）は「横断の注意点」に記録。</blockquote>
+<h2 id="core">Core 横断（確度・証拠）</h2>
+<table><thead><tr><th>用語</th><th>英語 / コード</th><th>定義</th></tr></thead><tbody><tr><td>確度ラベル</td><td><code>Confidence</code>（<code>confidence.py</code>）</td><td>抽出物の根拠の強さ。三値 <code>confirmed</code>/<code>derived</code>/<code>inferred</code>（sync #2）</td></tr><tr><td>確定</td><td>confirmed</td><td>コード証拠と 1:1 で裏付く確定層。確定者は文脈依存（→横断注意点）</td></tr><tr><td>派生</td><td>derived</td><td>確定層から決定的に導出した派生層（確度ラベル必須）</td></tr><tr><td>推論</td><td>inferred</td><td>LLM 推論・reconcile 合成など弱い根拠</td></tr><tr><td>証拠アンカー</td><td>evidence anchor</td><td>UC をコードに接地する <code>related_routes</code>/<code>_controllers</code>/<code>_entities</code>/<code>_pages</code></td></tr><tr><td>証拠の連鎖</td><td>evidence chain</td><td>APIエンドポイント→Controller→モデル＋画面→UC候補</td></tr></tbody></table>
+<h2 id="bc-core">BC ① 要求モデル抽出（Core）</h2>
+<table><thead><tr><th>用語</th><th>英語 / コード</th><th>定義</th></tr></thead><tbody><tr><td>ユースケース</td><td><code>UseCase</code>（<code>Usecase</code>）</td><td>コード証拠で確定した要求単位。確定層。確度付き</td></tr><tr><td>エンティティ</td><td><code>Entity</code>（<code>ParsedModel</code>＋<code>EntityOperation</code>）</td><td>操作対象の概念。CRUD 操作を持つ</td></tr><tr><td>APIエンドポイント</td><td><code>ApiEndpoint</code>（<code>ParsedRoute</code>）</td><td>起点。method＋path（VO）</td></tr><tr><td>画面</td><td><code>Screen</code>（<code>ParsedPage</code>）</td><td>接点。route_path＋component（VO）</td></tr><tr><td>解析セッション</td><td><code>AnalysisSession</code>（checkpoint）</td><td>解析の進行（parse→done）を束ねる Process</td></tr><tr><td>棄却</td><td>rejection</td><td>コード証拠なき UC を確定モデルから外すこと（Precision・sync #1）</td></tr><tr><td>棄却ログ</td><td><code>RejectedUsecase</code>（<code>rejection_log.py</code>）</td><td>棄却の追記専用記録（理由＋欠落証拠）。破棄でなく検証フローの入力</td></tr><tr><td>接点</td><td>contact point</td><td>アクターがシステムに触れる点＝画面</td></tr><tr><td>起点</td><td>entry point</td><td>システムの入口＝APIエンドポイント</td></tr><tr><td>システム境界</td><td><code>SystemBoundary</code>（<code>system_boundary.py</code>）</td><td>接点×起点の対応の Projection（集約でない・確度 derived・sync #3）</td></tr><tr><td>再導出（enrich）</td><td>enrich</td><td>checkpoint から related_* を決定的に埋め直す（LLM 不要）</td></tr><tr><td>情報モデル/状態遷移/ビジネスポリシー/CRUDギャップ</td><td>Projection（<code>rdra/</code>,<code>gap/</code>）</td><td>確定層から導出する派生投影（Read Model・確度 derived）</td></tr></tbody></table>
+<h2 id="bc-supporting-acl">BC ② 実績調停（Supporting / ACL）</h2>
+<table><thead><tr><th>用語</th><th>英語 / コード</th><th>定義</th></tr></thead><tbody><tr><td>実績シナリオ</td><td><code>OperationScenario</code>（<code>scenario_builder</code>）</td><td>loop-e2e の実行実績。ACL で取り込む</td></tr><tr><td>調停</td><td>reconcile（<code>reconcile.py</code>）</td><td>静的抽出と実績を突き合わせる</td></tr><tr><td>救済</td><td>rescue</td><td>静的棄却 UC を実績で「実績由来」確定に再昇格（未配線・残課題）</td></tr><tr><td>矛盾</td><td><code>Conflict</code>（<code>conflict_report.py</code>）</td><td>マッチ UC と実績の食い違い（actor/controller）。追記専用 Audit（sync #4）</td></tr><tr><td>要調査フラグ</td><td>needs-investigation</td><td>矛盾を PdM 提示用に記録。UC は変更しない</td></tr><tr><td>コードを真</td><td>code-wins</td><td>矛盾時は静的（コード）を正とするコア判断基準</td></tr></tbody></table>
+<h2 id="bc-supporting">BC ③ 業務フロー協働（Supporting）</h2>
+<table><thead><tr><th>用語</th><th>英語 / コード</th><th>定義</th></tr></thead><tbody><tr><td>業務フロー</td><td><code>BusinessFlow</code>（<code>workflow/</code>）</td><td>確定 UC 群から想定し PdM が承認する業務の流れ。ES（sync #5）</td></tr><tr><td>想定中</td><td><code>ProposedFlow</code></td><td>System が想定済み・未レビューの状態</td></tr><tr><td>レビュー中</td><td><code>ReviewingFlow</code></td><td>PdM がレビュー着手済みの状態</td></tr><tr><td>要修正</td><td><code>NeedsRevisionFlow</code></td><td>PdM が差し戻した状態（feedback 記録）</td></tr><tr><td>承認済み</td><td><code>ApprovedFlow</code></td><td>PdM 承認済み。引き渡し可能</td></tr><tr><td>引き渡し済み</td><td><code>HandedOffFlow</code></td><td>loop-e2e へ引き渡した終端状態</td></tr><tr><td>想定する</td><td>propose</td><td>確定 UC 群から業務フローを起こす（System）</td></tr><tr><td>レビューする</td><td>review</td><td>PdM がレビューに着手</td></tr><tr><td>フィードバック</td><td>feedback</td><td>PdM が差し戻す（→要修正）</td></tr><tr><td>再想定</td><td>re-propose</td><td>System が FB を反映し作り直す</td></tr><tr><td>編集</td><td>edit</td><td>PdM が手動微調整</td></tr><tr><td>承認</td><td>approve</td><td>PdM が確定（＝業務フロー確定。<strong>PdM のみ</strong>）</td></tr><tr><td>引き渡し</td><td>handoff</td><td>承認済みを loop-e2e へ（PL 成果物 <code>*.handoff.json</code>）</td></tr></tbody></table>
+<h2 id="bc-supporting">BC ④ 可視化（Supporting）</h2>
+<table><thead><tr><th>用語</th><th>英語 / コード</th><th>定義</th></tr></thead><tbody><tr><td>Mermaid 図</td><td>mermaid（<code>mermaid_renderer.py</code>）</td><td>RDRA モデルの図表現</td></tr><tr><td>ビューワー</td><td>viewer（<code>viewer_template.py</code>）</td><td>インタラクティブ閲覧 UI</td></tr><tr><td>クロスリファレンス</td><td>cross-reference</td><td>図要素とコード参照箇所の相互リンク</td></tr></tbody></table>
+<h2 id="generic-subdomains">Generic Subdomains</h2>
+<table><thead><tr><th>用語</th><th>英語 / コード</th><th>定義</th></tr></thead><tbody><tr><td>LLM プロバイダ</td><td><code>LLMProvider</code>（<code>llm/</code>）</td><td>Anthropic API / Claude Code CLI の抽象。代替可能</td></tr><tr><td>プロジェクトコンテキスト</td><td><code>ProjectContext</code>（<code>project_context.py</code>）</td><td>CLAUDE.md/AGENTS.md/マニフェスト読込</td></tr></tbody></table>
+<h2 id="">アクター</h2>
+<table><thead><tr><th>用語</th><th>定義</th></tr></thead><tbody><tr><td>PdM</td><td>プロダクトマネージャー。判断と業務フロー承認の確定者</td></tr><tr><td>System</td><td>rdra-analyzer。抽出・照合・確定/棄却・合成の自動実行者</td></tr><tr><td>loop-e2e</td><td>外部システム。実績の供給元（②へ）／承認済みフローの引き渡し先（③から）</td></tr></tbody></table>
+<h2 id="">コンテキスト横断の注意点（多義語）</h2>
+<table><thead><tr><th>用語</th><th>① 要求モデル抽出</th><th>他コンテキスト</th></tr></thead><tbody><tr><td><strong>確定</strong></td><td>コード証拠による自動確定（System）</td><td>③：PdM 承認による人間確定</td></tr><tr><td><strong>検証</strong></td><td>コード証拠と照合</td><td>loop-e2e：E2E 実行検証（スコープ外）</td></tr><tr><td><strong>ユースケース</strong></td><td>コード由来の検証済み UC</td><td>②：実績由来 UC（<code>UC-LE</code>・コードに無い）</td></tr><tr><td><strong>確定（②の救済）</strong></td><td>—</td><td>②：出自が「コード」でなく「実績」の確定</td></tr></tbody></table>
+<h2 id="analyze">コードとの対応（--analyze 観点）</h2>
+<table><thead><tr><th>用語集</th><th>コード上の名前</th><th>整合</th></tr></thead><tbody><tr><td>確度ラベル</td><td><code>Confidence</code> / <code>confidence</code></td><td>✅</td></tr><tr><td>棄却ログ</td><td><code>RejectedUsecase</code> / <code>rejection_log.py</code></td><td>✅</td></tr><tr><td>矛盾</td><td><code>Conflict</code> / <code>conflict_report.py</code></td><td>✅</td></tr><tr><td>業務フロー（状態）</td><td><code>ProposedFlow</code>/<code>ReviewingFlow</code>/<code>NeedsRevisionFlow</code>/<code>ApprovedFlow</code>/<code>HandedOffFlow</code></td><td>✅（sync #5 で登録・workflows.md フィードバック解消）</td></tr><tr><td>ユースケース</td><td><code>Usecase</code>（小文字 c）</td><td>🟡 軽微な綴り（<code>Usecase</code> vs <code>UseCase</code>）。コード現状を許容</td></tr><tr><td>システム境界</td><td><code>SystemBoundaryGenerator</code></td><td>✅（Projection＝生成器のみ）</td></tr></tbody></table>
+<h2 id="">未解決の問い</h2>
+<ul><li><code>Usecase</code> vs <code>UseCase</code> の綴り統一（コード広範のため #7 リファクタ時に検討）。</li><li>救済（rescue）の正式英名と配線（#1 follow-on）。</li></ul>
+</main>
+<footer>rdra-analyzer ドメインモデル &nbsp;|&nbsp; source: <code>docs/domain/glossary.md</code> &nbsp;|&nbsp; generated by /ddd publish</footer>
+</body></html>

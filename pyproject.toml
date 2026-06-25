@@ -14,7 +14,6 @@ dependencies = [
     "anthropic>=0.40.0",
     "typer[all]>=0.12.0",
     "rich>=13.0.0",
-    "playwright>=1.49.0",
     "pydantic>=2.0.0",
     "python-dotenv>=1.0.0",
     "aiofiles>=24.0.0",
@@ -26,7 +25,7 @@ rdra = "main:app"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["rdra_analyzer*", "llm*", "analyzer*", "rdra*", "gap*", "e2e*"]
+include = ["rdra_analyzer*", "llm*", "analyzer*", "rdra*", "gap*", "workflow*"]
 
 [tool.ruff]
 line-length = 100
