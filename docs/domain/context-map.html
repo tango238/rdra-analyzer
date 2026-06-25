@@ -76,7 +76,7 @@ footer{max-width:1000px;margin:0 auto;padding:20px 28px 60px;color:var(--muted);
 <h2 id="7">#7（コード構造リファクタ）への含意</h2>
 <p>関係種別が確定したことで sync #7 の前提が外れた。Shared Kernel（R3+R8）と Published Language（R4/R6）が パッケージ境界の指針になる:</p>
 <ul><li><strong><code>shared/</code></strong> ← Shared Kernel: <code>confidence</code> ＋ <code>scenario_builder</code>（<code>OperationScenario</code>/<code>OperationStep</code>）。①②④ が依存。</li><li><strong><code>extraction/</code></strong>（① Core）/ <strong><code>reconciliation/</code></strong>（② ACL）は Shared Kernel 越しに結合。ACL 翻訳（<code>normalize_route</code> 等）は <code>reconciliation/</code> 内に閉じる。</li><li><strong><code>workflow/</code></strong>（③）/ <strong><code>visualization/</code></strong>（④）/ <strong><code>llm/</code></strong> / <strong><code>context/</code></strong>（Generic）。</li><li>loop-e2e との PL スキーマ（pending.json）は <code>reconciliation/</code> の公開境界に置く。</li></ul>
-<p>→ この方針で <strong>sync #7</strong> を計画可能（destructive な横断移動のため承認ゲート前提）。</p>
+<p>→ ✅ <strong>sync #7 で実装済</strong>（別 PR <code>refactor/bc-aligned-packages</code>）。<code>shared/</code>＝Shared Kernel、<code>reconciliation/</code> に ACL 翻訳を閉じ込め、各 BC パッケージへ移行。<code>Usecase</code>→<code>UseCase</code> 統一。157 passed。</p>
 <h2 id="mapping">言語の境界で発見した事実（mapping）</h2>
 <ul><li><strong>loop-e2e は単一の関係ではなく双方向の別契約</strong>: ② への上流（実績 PL）と ③ からの下流（承認済みフロー PL）。同じ外部システムだが BC ごとに役割が反転する。</li><li><strong>① と ② は対等な Partnership ではなく Shared Kernel</strong>: Core↔Supporting の非対称があり、共有を <code>analysis_result.json</code> ＋少数の型に限定して結合を管理する方が健全。</li></ul>
 <h2 id="">未解決の問い</h2>

@@ -14,7 +14,7 @@ from __future__ import annotations
 import hashlib
 import re
 
-from analyzer.usecase_extractor import Usecase
+from extraction.usecase_extractor import UseCase
 
 
 def _safe_id(prefix: str, text: str) -> str:
@@ -38,7 +38,7 @@ def _esc(text: str) -> str:
 class SystemBoundaryGenerator:
     """確定 UC 群からシステム境界図（接点 × 起点）を生成する。決定的・LLM 不要。"""
 
-    def generate_mermaid(self, usecases: list[Usecase]) -> str:
+    def generate_mermaid(self, usecases: list[UseCase]) -> str:
         lines = ["---", "title: システム境界図", "---", "flowchart LR"]
 
         actors = sorted({uc.actor for uc in usecases if uc.actor})

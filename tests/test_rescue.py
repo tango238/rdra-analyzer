@@ -5,8 +5,8 @@ discovery の調停ルール:「静的で棄却 ＋ loop-e2e に実績あり →
 実績由来の証拠（facts）を付与して confidence=derived で確定に再昇格する。
 """
 
-from analyzer.reconcile import reconcile
-from analyzer.rejection_log import RejectedUsecase
+from reconciliation.reconcile import reconcile
+from extraction.rejection_log import RejectedUsecase
 
 
 def _pending(scenario_name: str):

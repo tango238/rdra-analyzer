@@ -5,10 +5,10 @@ TDD: まず RED で全件書き、crud_matrix.py 実装で GREEN にする。
 """
 
 import pytest
-from analyzer.source_parser import EntityOperation, ParsedRoute
-from analyzer.usecase_extractor import Usecase
+from extraction.source_parser import EntityOperation, ParsedRoute
+from extraction.usecase_extractor import UseCase
 
-from rdra.crud_matrix import (
+from extraction.derived.crud_matrix import (
     VERB_TO_CRUD,
     compute_uc_entity_crud,
     build_uc_entity_crud_index,
@@ -22,8 +22,8 @@ from rdra.crud_matrix import (
 # Fixture helpers
 # ---------------------------------------------------------------------------
 
-def _make_uc(uc_id: str, name: str, routes: list[str], entities: list[str]) -> Usecase:
-    return Usecase(
+def _make_uc(uc_id: str, name: str, routes: list[str], entities: list[str]) -> UseCase:
+    return UseCase(
         id=uc_id,
         name=name,
         actor="User",

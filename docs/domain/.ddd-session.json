@@ -53,7 +53,9 @@
     "残: #7構造リファクタ(deferred・破壊的=承認ゲート)、救済フロー#1 follow-on、Usecase vs UseCase綴り統一、loop-e2e実送信(現状artifact代替)",
     "救済フロー(#1 follow-on)完了: reconcileがrejection_log.jsonを読み名前一致で棄却UCを再昇格(id保持・confidence=derived・実績由来証拠付与・棄却ログから除去)。所有者は②ACL内。157 passed",
     "loop-e2e実送信は設計上のPL成果物(*.handoff.json)で完了とみなす: 統合はファイルベースPublished Language(inbound pending.jsonと対称)。ネットワーク呼出はBC境界(loop-e2eへ委譲)を越えるため作らない",
-    "ユーザー指示(全部): 救済+loop-e2e送信は本PRで完了。#7構造リファクタ+Usecase綴り統一は別PRで対応(本PR完了後)"
+    "ユーザー指示(全部): 救済+loop-e2e送信は本PRで完了。#7構造リファクタ+Usecase綴り統一は別PRで対応(本PR完了後)",
+    "#7完了(別PR refactor/bc-aligned-packages): 7パッケージへBC整合(extraction/derived/reconciliation/visualization/shared/context+workflow/llm)。移行手順=相対import絶対化→git mv→パス一括書換→解消パッケージ削除。157 passed",
+    "sync全完了: #1-#7すべてdone。台帳クローズ。本PR(feat/rdra-precision-and-ddd)=#1-#6+救済、別PR(refactor/bc-aligned-packages)=#7"
   ],
   "divergences": [
     {
@@ -115,9 +117,9 @@
       "fromPhase": "contexts",
       "type": "structure",
       "authority": "model",
-      "decision": "コードの継ぎ目を4 BC境界へ寄せる横断リファクタ。#6完了でScenario contextはscenario_builder型のみへ縮小。残る横断移動はPhase 4 mappingの関係種別確定が前提でdeferred",
-      "status": "deferred",
-      "commit": null
+      "decision": "BC整合パッケージへ移行(別PR refactor/bc-aligned-packages): analyzer/rdra/gap解消→extraction(+derived)/reconciliation/visualization/shared/context。Usecase→UseCase統一。死にメソッド(ScenarioVerifier参照)除去。43リネーム検出・157 passed",
+      "status": "done",
+      "commit": "ca3c6b7"
     }
   ]
 }

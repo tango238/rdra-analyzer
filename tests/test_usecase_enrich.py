@@ -1,15 +1,15 @@
-"""UsecaseExtractor の related_* 補完（_enrich_controllers / _enrich_pages）テスト"""
-from analyzer.source_parser import ParsedPage, ParsedRoute
-from analyzer.usecase_extractor import (
-    Usecase,
-    UsecaseExtractor,
+"""UseCaseExtractor の related_* 補完（_enrich_controllers / _enrich_pages）テスト"""
+from extraction.source_parser import ParsedPage, ParsedRoute
+from extraction.usecase_extractor import (
+    UseCase,
+    UseCaseExtractor,
     _api_paths_match,
     _api_path_segments,
 )
 
 
 def _uc(id, related_routes, related_pages=None):
-    return Usecase(
+    return UseCase(
         id=id, name=id, actor="ユーザー", description="",
         preconditions=[], postconditions=[],
         related_routes=related_routes, related_pages=related_pages or [],
@@ -31,7 +31,7 @@ def _page(route_path, component, api_calls):
 def test_enrich_controllers_matches_method_prefixed_route():
     uc = _uc("UC-001", ["GET /api/v1/hotels"])
     routes = [_route("GET", "/api/v1/hotels", "HotelController")]
-    UsecaseExtractor(None)._enrich_controllers([uc], routes)
+    UseCaseExtractor(None)._enrich_controllers([uc], routes)
     assert uc.related_controllers == ["HotelController"]
 
 
@@ -39,7 +39,7 @@ def test_enrich_controllers_matches_by_path_when_method_differs():
     # related_route が "ANY ..." でも path 一致でコントローラーを引ける
     uc = _uc("UC-001", ["ANY /api/v1/auth"])
     routes = [_route("POST", "/api/v1/auth", "AuthController")]
-    UsecaseExtractor(None)._enrich_controllers([uc], routes)
+    UseCaseExtractor(None)._enrich_controllers([uc], routes)
     assert uc.related_controllers == ["AuthController"]
 
 
@@ -73,7 +73,7 @@ def test_enrich_pages_matches_across_prefix_and_placeholder():
     uc = _uc("UC-020", ["GET /api/v1/operator/hotels/{hotelId}/bookings"])
     pages = [_page("/operator/booking/calendar", "BookingCalendar",
                    ["GET /operator/hotels/:hotelId/bookings"])]
-    UsecaseExtractor(None)._enrich_pages([uc], pages)
+    UseCaseExtractor(None)._enrich_pages([uc], pages)
     assert "/operator/booking/calendar" in uc.related_pages
 
 
@@ -82,7 +82,7 @@ def test_enrich_pages_populates_related_pages_and_views():
     uc = _uc("UC-010", ["GET /operator/hotels/:hotelId/bookings"])
     pages = [_page("/operator/booking/calendar", "BookingCalendar",
                    ["GET /operator/hotels/:hotelId/bookings"])]
-    UsecaseExtractor(None)._enrich_pages([uc], pages)
+    UseCaseExtractor(None)._enrich_pages([uc], pages)
     assert "/operator/booking/calendar" in uc.related_pages
     assert any("BookingCalendar" in v for v in uc.related_views)
 
@@ -90,7 +90,7 @@ def test_enrich_pages_populates_related_pages_and_views():
 def test_enrich_pages_preserves_existing_llm_pages():
     uc = _uc("UC-010", ["GET /x"], related_pages=["/llm/page"])
     pages = [_page("/derived", "C", ["GET /x"])]
-    UsecaseExtractor(None)._enrich_pages([uc], pages)
+    UseCaseExtractor(None)._enrich_pages([uc], pages)
     assert "/llm/page" in uc.related_pages  # 既存温存
     assert "/derived" in uc.related_pages  # 追加
 
@@ -98,22 +98,22 @@ def test_enrich_pages_preserves_existing_llm_pages():
 def test_enrich_pages_no_match_keeps_related_pages_unchanged():
     uc = _uc("UC-010", ["GET /x"], related_pages=["/keep"])
     pages = [_page("/other", "C", ["GET /unrelated"])]
-    UsecaseExtractor(None)._enrich_pages([uc], pages)
+    UseCaseExtractor(None)._enrich_pages([uc], pages)
     assert uc.related_pages == ["/keep"]
 
 
 def test_enrich_pages_empty_pages_is_noop():
     uc = _uc("UC-010", ["GET /x"], related_pages=["/keep"])
-    UsecaseExtractor(None)._enrich_pages([uc], [])
+    UseCaseExtractor(None)._enrich_pages([uc], [])
     assert uc.related_pages == ["/keep"]
 
 
 def test_enrich_pages_is_idempotent():
     uc = _uc("UC-010", ["GET /api/v1/x"])
     pages = [_page("/p", "C", ["GET /x"])]
-    UsecaseExtractor(None)._enrich_pages([uc], pages)
+    UseCaseExtractor(None)._enrich_pages([uc], pages)
     first_pages, first_views = list(uc.related_pages), list(uc.related_views)
-    UsecaseExtractor(None)._enrich_pages([uc], pages)  # 2回目
+    UseCaseExtractor(None)._enrich_pages([uc], pages)  # 2回目
     assert uc.related_pages == first_pages
     assert uc.related_views == first_views
 
@@ -123,7 +123,7 @@ def test_enrich_pages_preserves_existing_related_views():
     uc = _uc("UC-010", ["GET /x"])
     uc.related_views = ["LegacyView"]
     pages = [_page("/other", "C", ["GET /unrelated"])]
-    UsecaseExtractor(None)._enrich_pages([uc], pages)
+    UseCaseExtractor(None)._enrich_pages([uc], pages)
     assert "LegacyView" in uc.related_views
 
 
@@ -131,7 +131,7 @@ def test_enrich_pages_preserves_existing_related_views():
 # from_checkpoint_dict（スキーマdrift耐性）
 # --------------------------------------------------------------------------- #
 def test_from_checkpoint_dict_filters_unknown_keys():
-    from analyzer.source_parser import from_checkpoint_dict
+    from extraction.source_parser import from_checkpoint_dict
     d = {"method": "GET", "path": "/x", "controller": "C", "action": "i",
          "middleware": [], "prefix": "", "FUTURE_FIELD": "ignored"}
     r = from_checkpoint_dict(ParsedRoute, d)

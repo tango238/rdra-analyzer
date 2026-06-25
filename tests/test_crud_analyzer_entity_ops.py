@@ -1,7 +1,7 @@
 """CrudAnalyzer の EntityOperation 対応テスト"""
-from analyzer.source_parser import EntityOperation
-from rdra.information_model import Entity
-from gap.crud_analyzer import CrudAnalyzer, EntityCrudStatus
+from extraction.source_parser import EntityOperation
+from extraction.derived.information_model import Entity
+from extraction.derived.crud_analyzer import CrudAnalyzer, EntityCrudStatus
 
 
 def _make_entity(name: str, class_name: str) -> Entity:

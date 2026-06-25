@@ -11,8 +11,8 @@ from __future__ import annotations
 
 import re
 
-from analyzer.source_parser import EntityOperation, ParsedRoute
-from analyzer.usecase_extractor import Usecase
+from extraction.source_parser import EntityOperation, ParsedRoute
+from extraction.usecase_extractor import UseCase
 
 # ---------------------------------------------------------------------------
 # 動詞 → CRUD 辞書 (Tier 2)
@@ -48,7 +48,7 @@ _HTTP_METHOD_TO_CRUD: dict[str, str] = {
 
 
 def compute_uc_entity_crud(
-    uc: Usecase,
+    uc: UseCase,
     entity_class: str,
     entity_operations: list[EntityOperation],
     routes_by_key: dict[str, ParsedRoute],
@@ -73,7 +73,7 @@ def compute_uc_entity_crud(
 
 
 def build_uc_entity_crud_index(
-    usecases: list[Usecase],
+    usecases: list[UseCase],
     entity_operations: list[EntityOperation],
     routes: list[ParsedRoute],
 ) -> dict[str, dict[str, list[str]]]:
@@ -147,7 +147,7 @@ def _normalize_op_to_chars(operation: str) -> list[str]:
 
 
 def _tier1_entity_ops(
-    uc: Usecase,
+    uc: UseCase,
     entity_class: str,
     entity_operations: list[EntityOperation],
     routes_by_key: dict[str, ParsedRoute],
@@ -178,7 +178,7 @@ def _tier1_entity_ops(
 
 
 def _tier2_verb_heuristics(
-    uc: Usecase,
+    uc: UseCase,
     routes_by_key: dict[str, ParsedRoute],
 ) -> set[str]:
     """Tier 2: action 名やパス末尾をトークン化し VERB_TO_CRUD で照合。"""
@@ -202,7 +202,7 @@ def _tier2_verb_heuristics(
     return crud_chars
 
 
-def _tier3_http_method(uc: Usecase) -> set[str]:
+def _tier3_http_method(uc: UseCase) -> set[str]:
     """Tier 3: HTTP メソッドベースのフォールバック。"""
     crud_chars: set[str] = set()
 

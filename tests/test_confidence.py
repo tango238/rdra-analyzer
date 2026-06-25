@@ -4,19 +4,19 @@
 合成・LLM 推論 = inferred の三値を、抽出物に付与・永続化できることを検証する。
 """
 
-from analyzer.reconcile import (
+from reconciliation.reconcile import (
     PendingEntry,
     ReconcileFacts,
     _load_usecases,
     _synthesize_usecase,
     _usecase_to_dict,
 )
-from analyzer.source_parser import EntityOperation
-from analyzer.usecase_extractor import Usecase
-from confidence import coerce, rank
+from extraction.source_parser import EntityOperation
+from extraction.usecase_extractor import UseCase
+from shared.confidence import coerce, rank
 
 
-def _uc(**kw) -> Usecase:
+def _uc(**kw) -> UseCase:
     base = dict(
         id="UC-001",
         name="商品を登録する",
@@ -30,7 +30,7 @@ def _uc(**kw) -> Usecase:
         category="商品管理",
     )
     base.update(kw)
-    return Usecase(**base)  # type: ignore[arg-type]
+    return UseCase(**base)  # type: ignore[arg-type]
 
 
 class TestConfidenceType:

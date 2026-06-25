@@ -87,7 +87,7 @@ flowchart LR
 - **`workflow/`**（③）/ **`visualization/`**（④）/ **`llm/`** / **`context/`**（Generic）。
 - loop-e2e との PL スキーマ（pending.json）は `reconciliation/` の公開境界に置く。
 
-→ この方針で **sync #7** を計画可能（destructive な横断移動のため承認ゲート前提）。
+→ ✅ **sync #7 で実装済**（別 PR `refactor/bc-aligned-packages`）。`shared/`＝Shared Kernel、`reconciliation/` に ACL 翻訳を閉じ込め、各 BC パッケージへ移行。`Usecase`→`UseCase` 統一。157 passed。
 
 ## 言語の境界で発見した事実（mapping）
 

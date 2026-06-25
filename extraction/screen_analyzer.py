@@ -13,8 +13,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from llm.provider import LLMProvider
-from .source_parser import ParsedPage
-from .project_context import build_context, format_context_for_prompt
+from extraction.source_parser import ParsedPage
+from context.project_context import build_context, format_context_for_prompt
 
 
 @dataclass

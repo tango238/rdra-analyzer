@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from llm.provider import LLMProvider
-from .usecase_extractor import Usecase
+from extraction.usecase_extractor import UseCase
 
 
 @dataclass
@@ -56,7 +56,7 @@ class ScenarioBuilder:
         self._screen_specs = screen_specs or []
         self._screen_api_index = self._build_screen_api_index()
 
-    def build(self, usecases: list[Usecase]) -> list[OperationScenario]:
+    def build(self, usecases: list[UseCase]) -> list[OperationScenario]:
         """
         ユースケースリストから操作シナリオを構築する。
 
@@ -91,7 +91,7 @@ class ScenarioBuilder:
                         index.setdefault(resource.rstrip("s"), []).append(spec)
         return index
 
-    def _find_screens_for_usecase(self, usecase: Usecase) -> list:
+    def _find_screens_for_usecase(self, usecase: UseCase) -> list:
         """ユースケースに関連する画面仕様を特定する"""
         import re
         matched = []
@@ -136,7 +136,7 @@ class ScenarioBuilder:
 
         return "\n".join(lines)
 
-    def _build_for_usecase(self, usecase: Usecase) -> list[OperationScenario]:
+    def _build_for_usecase(self, usecase: UseCase) -> list[OperationScenario]:
         """
         1つのユースケースに対して操作シナリオを生成する。
 
@@ -222,7 +222,7 @@ class ScenarioBuilder:
         return self._parse_scenarios(response, usecase)
 
     def _parse_scenarios(
-        self, response: str, usecase: Usecase
+        self, response: str, usecase: UseCase
     ) -> list[OperationScenario]:
         """LLMレスポンスをOperationScenarioオブジェクトに変換する"""
         scenarios: list[OperationScenario] = []
@@ -262,7 +262,7 @@ class ScenarioBuilder:
 
         return scenarios
 
-    def _create_fallback_scenario(self, usecase: Usecase) -> OperationScenario:
+    def _create_fallback_scenario(self, usecase: UseCase) -> OperationScenario:
         """LLMパース失敗時のフォールバックシナリオ"""
         steps = [
             OperationStep(
@@ -299,7 +299,7 @@ class ScenarioBuilder:
 
     def save_to_json(
         self,
-        usecases: list[Usecase],
+        usecases: list[UseCase],
         scenarios: list[OperationScenario],
         output_path: Path,
     ) -> None:

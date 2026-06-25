@@ -10,7 +10,7 @@ import re
 from dataclasses import dataclass, field
 
 from llm.provider import LLMProvider
-from .information_model import Entity
+from extraction.derived.information_model import Entity
 
 
 @dataclass

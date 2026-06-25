@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from .usecase_extractor import Usecase
+from extraction.usecase_extractor import UseCase
 
 # UC をコードへ接地する証拠アンカー。いずれか1つでもあれば確定モデルに残す。
 _EVIDENCE_FIELDS: tuple[str, ...] = (
@@ -35,25 +35,25 @@ class RejectedUsecase:
     missing_evidence: list[str] = field(default_factory=list)
 
 
-def _anchors(uc: Usecase) -> dict[str, list[str]]:
+def _anchors(uc: UseCase) -> dict[str, list[str]]:
     return {f: list(getattr(uc, f) or []) for f in _EVIDENCE_FIELDS}
 
 
-def has_code_evidence(uc: Usecase) -> bool:
+def has_code_evidence(uc: UseCase) -> bool:
     """UC がコード証拠アンカーを1つでも持つか。"""
     return any(_anchors(uc).values())
 
 
-def missing_evidence(uc: Usecase) -> list[str]:
+def missing_evidence(uc: UseCase) -> list[str]:
     """空になっている証拠アンカーのフィールド名一覧（欠落証拠）。"""
     return [name for name, values in _anchors(uc).items() if not values]
 
 
 def partition_usecases(
-    usecases: list[Usecase],
-) -> tuple[list[Usecase], list[RejectedUsecase]]:
+    usecases: list[UseCase],
+) -> tuple[list[UseCase], list[RejectedUsecase]]:
     """確定（証拠あり）と棄却（証拠なし）に分割する。入力は破壊しない。"""
-    confirmed: list[Usecase] = []
+    confirmed: list[UseCase] = []
     rejected: list[RejectedUsecase] = []
     for uc in usecases:
         if has_code_evidence(uc):

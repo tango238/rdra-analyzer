@@ -1,5 +1,5 @@
 """_attach_operations_to_controllers のユニットテスト"""
-from analyzer.source_parser import (
+from extraction.source_parser import (
     SourceParser, ParsedController, EntityOperation,
 )
 

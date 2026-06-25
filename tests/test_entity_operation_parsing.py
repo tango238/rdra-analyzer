@@ -1,5 +1,5 @@
 """EntityOperation JSON パースのユニットテスト"""
-from analyzer.source_parser import SourceParser, EntityOperation
+from extraction.source_parser import SourceParser, EntityOperation
 
 
 def test_parse_entity_operations_json_valid():

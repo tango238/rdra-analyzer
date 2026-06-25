@@ -1,5 +1,5 @@
 """reconcile モジュールのテスト"""
-from analyzer.reconcile import (
+from reconciliation.reconcile import (
     PendingEntry,
     ReconcileResult,
     RouteKey,
@@ -14,7 +14,7 @@ from analyzer.reconcile import (
     route_key_equals,
     validate,
 )
-from analyzer.usecase_extractor import Usecase
+from extraction.usecase_extractor import UseCase
 
 
 def _uc(id, **kw):
@@ -33,7 +33,7 @@ def _uc(id, **kw):
         related_views=[],
     )
     base.update(kw)
-    return Usecase(id=id, **base)
+    return UseCase(id=id, **base)
 
 
 # --------------------------------------------------------------------------- #

@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 import pytest
 import typer
 
-from analyzer.source_parser import RepoParseResult
+from extraction.source_parser import RepoParseResult
 from main import _parse_single_repo, _resolve_parallel, _run_parallel_parse
 
 
