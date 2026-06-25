@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+import pytest
+
 from workflow.events import (
     BusinessFlowApproved,
     BusinessFlowProposed,
@@ -39,3 +41,20 @@ def test_load_reconstructs_via_fold(tmp_path: Path) -> None:
     p = flow_path(tmp_path, "BF-7")
     append(p, BusinessFlowProposed("BF-7", ("UC-001",), "t0"))
     assert fold(load(p)).flow_id == "BF-7"
+
+
+@pytest.mark.parametrize(
+    "bad",
+    ["../evil", "../../etc/passwd", "a/b", "..", "with/slash", "back\\slash", "dot.ted", ""],
+)
+def test_flow_path_rejects_unsafe_ids(tmp_path: Path, bad: str) -> None:
+    # flow_id は CLI 自由入力。パス区切りや .. を ID に混ぜて business_flows 外へ
+    # 書き込めてはならない（Codex P2 パストラバーサル）。
+    with pytest.raises(ValueError):
+        flow_path(tmp_path, bad)
+
+
+def test_flow_path_accepts_normal_ids(tmp_path: Path) -> None:
+    p = flow_path(tmp_path, "BF-1")
+    assert p.name == "BF-1.jsonl"
+    assert p.parent.name == "business_flows"
