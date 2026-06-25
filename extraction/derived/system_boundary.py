@@ -11,15 +11,23 @@ enrich の照合結果（`related_pages` / `related_views` / `related_routes`）
 
 from __future__ import annotations
 
+import hashlib
 import re
 
 from extraction.usecase_extractor import UseCase
 
 
 def _safe_id(prefix: str, text: str) -> str:
-    """Mermaid ノード ID 用に英数字以外を _ へ畳む。空なら prefix のみ。"""
+    """Mermaid ノード ID を決定的に生成する。
+
+    ASCII 英数字は可読性のため slug として残すが、非 ASCII（日本語アクター・
+    画面名が通常ケース）は ASCII へ畳むと全消失し別ノードが同一 ID に潰れる。
+    そこで原文の短いハッシュを必ず付与し、異なるテキストは必ず異なる ID にする。
+    純粋関数なのでノード定義・エッジ・class 参照すべてで一貫する。
+    """
     slug = re.sub(r"[^0-9A-Za-z]+", "_", text).strip("_")
-    return f"{prefix}_{slug}" if slug else prefix
+    digest = hashlib.sha1(text.encode("utf-8")).hexdigest()[:8]
+    return f"{prefix}_{slug}_{digest}" if slug else f"{prefix}_{digest}"
 
 
 def _esc(text: str) -> str:

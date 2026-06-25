@@ -4,6 +4,8 @@
 enrich の照合結果（related_pages/related_views/related_routes）から決定的に生成する（LLM 不要）。
 """
 
+import re
+
 from extraction.usecase_extractor import UseCase
 from extraction.derived.system_boundary import SystemBoundaryGenerator
 
@@ -57,3 +59,23 @@ class TestSystemBoundary:
         gen = SystemBoundaryGenerator()
         ucs = [_uc(), _uc(id="UC-002", actor="一般ユーザー", related_routes=["GET /api/items"])]
         assert gen.generate_mermaid(ucs) == gen.generate_mermaid(ucs)
+
+    def test_non_ascii_actors_get_distinct_node_ids(self) -> None:
+        # 日本語アクター名は ASCII へ畳むと全消失し同一ノードに潰れていた（Codex P2）。
+        ucs = [
+            _uc(id="UC-001", actor="管理者", related_routes=["POST /api/orders"], related_pages=[]),
+            _uc(id="UC-002", actor="一般ユーザー", related_routes=["GET /api/items"], related_pages=[]),
+        ]
+        out = SystemBoundaryGenerator().generate_mermaid(ucs)
+        actor_ids = re.findall(r"class (\S+) actor", out)
+        assert len(actor_ids) == 2
+        assert len(set(actor_ids)) == 2  # 別アクターが同一ノードに衝突しない
+
+    def test_non_ascii_screens_get_distinct_node_ids(self) -> None:
+        ucs = [
+            _uc(id="UC-001", actor="管理者", related_pages=["注文画面"], related_routes=["POST /api/orders"]),
+            _uc(id="UC-002", actor="管理者", related_pages=["顧客画面"], related_routes=["GET /api/customers"]),
+        ]
+        out = SystemBoundaryGenerator().generate_mermaid(ucs)
+        screen_ids = re.findall(r"class (\S+) screen", out)
+        assert len(set(screen_ids)) == 2
