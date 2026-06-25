@@ -1,6 +1,6 @@
 {
-  "currentPhase": "types",
-  "completedPhases": ["discover", "storming", "contexts", "mapping", "aggregates", "events", "workflows", "types"],
+  "currentPhase": "glossary",
+  "completedPhases": ["discover", "storming", "contexts", "mapping", "aggregates", "events", "workflows", "types", "sync", "glossary"],
   "lastUpdated": "2026-06-25",
   "analyzeApplied": ["contexts", "storming", "contexts-resync"],
   "openQuestions": [
@@ -47,7 +47,11 @@
     "workflows確定: Phase9は業務フロー承認ループ(③/#5)のみ詳細設計。抽出①/調停②は実装済みで後追い--analyze",
     "workflows確定: ステージ=状態型(ProposedFlow→ReviewingFlow⇄NeedsRevisionFlow→ApprovedFlow→HandedOffFlow)。handOffはApprovedFlow型のみに生やし不正状態を表現不能に",
     "workflows確定: コマンド=(状態,入力,依存)→Result<Event,Error>。guard純粋・依存は関数引数(DI無)・副作用は両端(LoadFlowEvents/AppendFlowEvent/HandOffToLoopE2e)",
-    "workflows確定: 次はPhase10 typesで状態型/Result/Status/エラー階層を型化→syncでworkflow/をTDD実装(fold純粋性・guard不変条件テスト先行)"
+    "workflows確定: 次はPhase10 typesで状態型/Result/Status/エラー階層を型化→syncでworkflow/をTDD実装(fold純粋性・guard不変条件テスト先行)",
+    "types(Phase10)完了: docs/domain/code/にPython型骨格(Result/states/events/errors/ports/workflow)。py_compile通過。handOffはApprovedFlowのみで不正状態を表現不能",
+    "sync #5完了: workflow/をTDD実装(ES+状態機械+guard+CLI)。28新規テスト・154 passed。コミットcf3ca09→ffb0e22→9ddf476→42958f0。モデル再整合済(67b3fde,84a17d9)",
+    "glossary(Phase8)完了: BC別ユビキタス言語。多義語(確定/検証/ユースケース)とコード対応を記録。状態型名をworkflows.mdフィードバックから登録",
+    "残: #7構造リファクタ(deferred・破壊的=承認ゲート)、救済フロー#1 follow-on、Usecase vs UseCase綴り統一、loop-e2e実送信(現状artifact代替)"
   ],
   "divergences": [
     {
