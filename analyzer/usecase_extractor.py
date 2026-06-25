@@ -12,6 +12,7 @@ import json
 import re
 from dataclasses import dataclass, field
 
+from confidence import CONFIRMED, Confidence
 from llm.provider import LLMProvider
 from .source_parser import ParsedRoute, ParsedController, ParsedModel, ParsedPage
 
@@ -32,6 +33,7 @@ class Usecase:
     priority: str = "medium"    # 優先度（high/medium/low）
     related_controllers: list[str] = field(default_factory=list)  # 関連コントローラー
     related_views: list[str] = field(default_factory=list)        # 関連ビュー/ページコンポーネント
+    confidence: Confidence = CONFIRMED  # 確度ラベル（確定層=confirmed）。sync #2
 
 
 def _api_path_segments(route_or_call: str) -> list[str]:

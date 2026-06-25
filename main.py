@@ -151,7 +151,7 @@ def _save_parse_checkpoint(data: dict, checkpoint_path: Path) -> None:
         return {"entity_class": op.entity_class, "operation": op.operation,
                 "method_signature": op.method_signature, "source_file": op.source_file,
                 "source_class": op.source_class, "source_method": op.source_method,
-                "call_chain": op.call_chain}
+                "call_chain": op.call_chain, "confidence": op.confidence}
 
     serializable = {
         "routes": [_route_to_dict(r) for r in data.get("routes", [])],
@@ -330,6 +330,10 @@ def run_analyze(
     parallel: int = typer.Option(
         0, "--parallel", "-j",
         help="リポジトリ並列度（0=自動: min(4, リポ数)、1=直列）"
+    ),
+    strict: bool = typer.Option(
+        False, "--strict",
+        help="Precision重視: コード証拠に紐づかないUCを確定モデルから棄却し棄却ログへ退避（sync #1）"
     ),
 ):
     """
@@ -652,6 +656,24 @@ def run_analyze(
             usecases = extractor._assign_ids(usecases)
             console.print(f"  -> ユースケース: {len(usecases)}件（重複除去後）")
 
+        # Precision 棄却（opt-in）: コード証拠なき UC を確定モデルから外し棄却ログへ（sync #1）
+        if strict:
+            from analyzer.rejection_log import partition_usecases, rejected_to_dict
+            usecases, rejected = partition_usecases(usecases)
+            rejection_path = output_dir / "usecases" / "rejection_log.json"
+            rejection_path.parent.mkdir(parents=True, exist_ok=True)
+            rejection_path.write_text(
+                json.dumps(
+                    {"rejected": [rejected_to_dict(r) for r in rejected]},
+                    ensure_ascii=False, indent=2,
+                ),
+                encoding="utf-8",
+            )
+            console.print(
+                f"  [yellow]Precision棄却: 確定 {len(usecases)}件 / 棄却 {len(rejected)}件"
+                f"[/yellow] -> {rejection_path}"
+            )
+
         # ユースケースを保存
         from analyzer.scenario_builder import ScenarioBuilder
         builder = ScenarioBuilder(llm)
@@ -670,275 +692,6 @@ def run_analyze(
     console.print(f"  出力ファイル: {output_path}")
 
     return usecases, screen_specs, routes, all_models
-
-
-@app.command("scenarios")
-def run_scenarios(
-    input_file: Optional[Path] = typer.Option(
-        None, "--input", "-i", help="パート1の出力JSONファイル（省略時は ./output/usecases/analysis_result.json）"
-    ),
-    max_count: int = typer.Option(
-        5, "--max", "-n", help="生成するシナリオ数の上限"
-    ),
-    offset: int = typer.Option(
-        0, "--offset", help="スキップするユースケース数（再開用）"
-    ),
-    force: bool = typer.Option(
-        False, "--force", help="loop-e2e 一本化方針を無視して生成する"
-    ),
-):
-    """
-    パート1補助: 保存済みユースケースJSONからシナリオを追加生成する。
-
-    [非推奨] シナリオの源泉は loop-e2e に一本化済み。rdra へは
-    'loop-e2e rdra-export' → 'reconcile' で取り込む。生成したい場合は --force。
-    """
-    _print_header("シナリオ生成（保存済みユースケースから）")
-
-    if not force:
-        console.print(
-            "[yellow]シナリオ生成は loop-e2e に一本化されています。[/yellow]\n"
-            "  loop-e2e でシナリオを生成し、'loop-e2e rdra-export' → "
-            "'python main.py reconcile' で取り込んでください。\n"
-            "  どうしても rdra 側で生成する場合は --force を付けてください。"
-        )
-        raise typer.Exit(0)
-
-    config = _get_config()
-    input_file = input_file or Path(config.output_dir) / "usecases" / "analysis_result.json"
-
-    if not input_file.exists():
-        console.print(f"[red]入力ファイルが見つかりません: {input_file}[/red]")
-        console.print("先に 'python main.py analyze --no-scenarios' を実行してください。")
-        raise typer.Exit(1)
-
-    data = json.loads(input_file.read_text(encoding="utf-8"))
-    usecases, existing_scenarios = _load_analysis_result(data)
-    console.print(f"  読み込み: ユースケース {len(usecases)}件 | 既存シナリオ {len(existing_scenarios)}件")
-
-    target = usecases[offset: offset + max_count]
-    if not target:
-        console.print("[yellow]処理対象のユースケースがありません（--offset を確認）[/yellow]")
-        raise typer.Exit(0)
-
-    llm = _get_llm()
-
-    # 画面仕様を読み込み（存在すれば）
-    screen_specs = []
-    screen_path = (input_file.parent if input_file else Path(config.output_dir) / "usecases") / "screen_specs.json"
-    if screen_path.exists():
-        from analyzer.screen_analyzer import ScreenAnalyzer
-        screen_specs = ScreenAnalyzer.load_from_json(screen_path)
-        console.print(f"  画面仕様: {len(screen_specs)}件を読み込み")
-
-    from analyzer.scenario_builder import ScenarioBuilder
-    builder = ScenarioBuilder(llm, screen_specs=screen_specs)
-
-    new_scenarios = list(existing_scenarios)
-    validated_count = 0
-    retried_count = 0
-    for i, uc in enumerate(target):
-        console.print(f"  [{offset+i+1}/{len(usecases)}] {uc.id}: {uc.name}")
-        if screen_specs:
-            sc_list = builder.build_and_validate_for_usecase(uc)
-            # 検証結果をログ出力
-            from analyzer.scenario_verifier import ScenarioVerifier
-            verifier = ScenarioVerifier()
-            matched_screens = builder._find_screens_for_usecase(uc)
-            if matched_screens:
-                validated_count += 1
-                all_labels = set()
-                for screen in matched_screens:
-                    for b in screen.action_buttons:
-                        all_labels.add(b.label)
-                    for f in screen.form_fields:
-                        all_labels.add(f.label)
-                    for m in screen.shared_nav_items:
-                        all_labels.add(m.label)
-                    for modal in screen.modals:
-                        all_labels.add(modal)
-                    for tab in screen.tabs:
-                        all_labels.add(tab)
-                has_issues = False
-                for sc in sc_list:
-                    for step in sc.steps:
-                        if step.actor == "システム":
-                            continue
-                        issues = verifier._verify_step(
-                            step, sc.scenario_id,
-                            all_labels, set(), set(), set(), matched_screens,
-                        )
-                        if issues:
-                            has_issues = True
-                            break
-                if not has_issues:
-                    console.print(f"    [green]✓ 画面検証OK[/green]")
-                else:
-                    retried_count += 1
-                    console.print(f"    [yellow]△ 一部不整合あり（再生成済み）[/yellow]")
-        else:
-            sc_list = builder._build_for_usecase(uc)
-        new_scenarios.extend(sc_list)
-        builder.save_to_json(usecases, new_scenarios, input_file)
-
-    console.print(f"\n[green]シナリオ追加完了[/green]")
-    console.print(f"  合計シナリオ数: {len(new_scenarios)}件")
-    if screen_specs:
-        console.print(f"  画面検証: {validated_count}件検証 | {retried_count}件再生成")
-    console.print(f"  出力ファイル: {input_file}")
-    if offset + max_count < len(usecases):
-        next_offset = offset + max_count
-        console.print(
-            f"  [dim]続きを生成するには: python main.py scenarios --offset {next_offset}[/dim]"
-        )
-
-
-@app.command("verify")
-def run_verify(
-    output_dir: Optional[Path] = typer.Option(
-        None, "--output", "-o", help="出力ディレクトリ"
-    ),
-    fix: bool = typer.Option(
-        False, "--fix", help="LLMで不整合シナリオを自動修正する"
-    ),
-):
-    """
-    シナリオ×画面 突き合わせ検証
-
-    操作シナリオの各ステップが実際の画面UI要素と整合しているか検証する。
-    --fix を指定すると、不整合のあるシナリオをLLMで自動修正する。
-    """
-    _print_header("シナリオ×画面 突き合わせ検証")
-
-    config = _get_config()
-    output_dir = output_dir or config.output_dir
-    output_dir = Path(output_dir)
-
-    # 解析結果の読み込み
-    analysis_path = output_dir / "usecases" / "analysis_result.json"
-    if not analysis_path.exists():
-        console.print("[red]解析結果が見つかりません。先に 'analyze' を実行してください。[/red]")
-        raise typer.Exit(1)
-
-    data = json.loads(analysis_path.read_text(encoding="utf-8"))
-    usecases, scenarios = _load_analysis_result(data)
-    console.print(f"  ユースケース: {len(usecases)}件 | シナリオ: {len(scenarios)}件")
-
-    # loop-e2e 由来(LE-)シナリオは loop-e2e 所有 → --fix では改変しない
-    le_owned = [s for s in scenarios if s.scenario_id.startswith("LE-")]
-    if fix and le_owned:
-        console.print(
-            f"  [cyan]LE- シナリオ {len(le_owned)}件は loop-e2e 所有のため --fix 対象外[/cyan]"
-        )
-        scenarios = [s for s in scenarios if not s.scenario_id.startswith("LE-")]
-
-    # 画面仕様の読み込み
-    screen_path = output_dir / "usecases" / "screen_specs.json"
-    if not screen_path.exists():
-        console.print("[red]画面仕様が見つかりません。先に 'screens' を実行してください。[/red]")
-        raise typer.Exit(1)
-
-    from analyzer.screen_analyzer import ScreenAnalyzer
-    screen_specs = ScreenAnalyzer.load_from_json(screen_path)
-    console.print(f"  画面仕様: {len(screen_specs)}件")
-
-    # 検証実行
-    from analyzer.scenario_verifier import ScenarioVerifier
-    from analyzer.scenario_builder import ScenarioBuilder
-    llm = _get_llm() if fix else None
-
-    # 中間保存コールバック
-    def _save_progress(fixed_so_far, remaining):
-        all_scenarios = le_owned + fixed_so_far + remaining
-        builder = ScenarioBuilder(llm)
-        builder.save_to_json(usecases, all_scenarios, analysis_path)
-        console.print(f"    [dim]-> 中間保存: {len(fixed_so_far)}件修正済み[/dim]")
-
-    verifier = ScenarioVerifier(llm, save_callback=_save_progress if fix else None)
-
-    console.print("[dim]検証中...[/dim]")
-    results = verifier.verify_all(scenarios, screen_specs, usecases)
-
-    # サマリ表示
-    total = len(results)
-    with_issues = sum(1 for r in results if r.issues)
-    total_issues = sum(len(r.issues) for r in results)
-    avg_pass = sum(r.pass_rate for r in results) / total if total else 0
-
-    console.print(f"\n[bold]検証結果:[/bold]")
-    console.print(f"  シナリオ数: {total}")
-    console.print(f"  問題あり: {with_issues}件")
-    console.print(f"  総問題数: {total_issues}")
-    console.print(f"  平均適合率: {avg_pass:.0%}")
-
-    # 問題の内訳
-    issue_types: dict[str, int] = {}
-    for r in results:
-        for i in r.issues:
-            issue_types[i.issue_type] = issue_types.get(i.issue_type, 0) + 1
-    if issue_types:
-        console.print("\n  [bold]問題内訳:[/bold]")
-        type_labels = {
-            "missing_element": "存在しないUI要素",
-            "no_matching_screen": "対応画面なし",
-            "wrong_label": "ラベル不一致",
-            "missing_api": "API未対応",
-        }
-        for t, count in sorted(issue_types.items(), key=lambda x: -x[1]):
-            console.print(f"    {type_labels.get(t, t)}: {count}件")
-
-    # レポート保存
-    report_path = output_dir / "usecases" / "verification_report"
-    ScenarioVerifier.save_report(results, report_path)
-    console.print(f"\n  レポート: {report_path}.json / {report_path}.md")
-
-    # 自動修正
-    if fix and with_issues > 0:
-        # 前回修正済みのシナリオを検出（中間保存から再開）
-        # 再検証して問題なしのシナリオ = 前回修正済み
-        already_fixed = set()
-        for r in results:
-            if not r.issues:
-                # 問題なし = 元から正常 or 前回修正済み
-                # 初回検証レポートと比較して、以前問題ありだったが今は正常なものを特定
-                already_fixed.add(r.scenario_id)
-        # ただし初回実行時は全て「問題なし=元から正常」なのでスキップ対象にはならない
-        # already_fixed から元々問題なしだったものを除外
-        originally_ok = {r.scenario_id for r in results if not r.issues}
-        # 再開用: 問題ありシナリオのみが修正対象
-        # already_fixed は使わず、前回の検証レポートから判定
-        report_json_path = output_dir / "usecases" / "verification_report.json"
-        previously_fixed = set()
-        if report_json_path.exists():
-            prev_report = json.loads(report_json_path.read_text(encoding="utf-8"))
-            prev_issue_ids = {r["scenario_id"] for r in prev_report.get("results", []) if r.get("issues")}
-            # 前回問題ありだが今回問題なし → 修正済み
-            for r in results:
-                if r.scenario_id in prev_issue_ids and not r.issues:
-                    previously_fixed.add(r.scenario_id)
-            if previously_fixed:
-                console.print(f"  [cyan]前回修正済み: {len(previously_fixed)}件をスキップ[/cyan]")
-
-        remaining = with_issues - len(previously_fixed & {r.scenario_id for r in results if r.issues})
-        console.print(f"\n[dim]不整合シナリオを修正中（{remaining}件）...[/dim]")
-        fixed_scenarios = verifier.fix_scenarios(
-            scenarios, screen_specs, usecases, results,
-            already_fixed=previously_fixed,
-        )
-
-        # 修正後のシナリオを保存（LE- は所有元 loop-e2e のまま温存）
-        builder = ScenarioBuilder(llm)
-        builder.save_to_json(usecases, le_owned + fixed_scenarios, analysis_path)
-        console.print(f"  -> 修正済みシナリオを保存: {analysis_path}")
-
-        # 再検証
-        console.print("[dim]再検証中...[/dim]")
-        results2 = verifier.verify_all(fixed_scenarios, screen_specs, usecases)
-        with_issues2 = sum(1 for r in results2 if r.issues)
-        avg_pass2 = sum(r.pass_rate for r in results2) / len(results2) if results2 else 0
-        console.print(f"  修正後: 問題あり {with_issues} → {with_issues2}件 | 適合率 {avg_pass:.0%} → {avg_pass2:.0%}")
-
-    console.print(f"\n[green]検証完了[/green]")
 
 
 @app.command("reconcile")
@@ -1018,10 +771,25 @@ def run_reconcile(
         json.dumps(pending, ensure_ascii=False, indent=2), encoding="utf-8"
     )
 
+    # 矛盾（要調査）レポートを出力（コードを真・UC は上書きしない）。sync #4
+    from analyzer.conflict_report import conflict_to_dict
+    conflict_path = uc_dir / "conflict_report.json"
+    conflict_path.write_text(
+        json.dumps(
+            {"conflicts": [conflict_to_dict(c) for c in result.conflicts]},
+            ensure_ascii=False, indent=2,
+        ),
+        encoding="utf-8",
+    )
+
     console.print(f"\n[green]取り込み完了[/green]")
     console.print(f"  既存UCに紐付け: {result.linked}件")
     console.print(f"  新規UC生成: {result.created}件")
     console.print(f"  取り込みシナリオ: {len(result.reconciled)}件 (LE-)")
+    if result.conflicts:
+        console.print(
+            f"  [yellow]要調査の矛盾: {len(result.conflicts)}件（コードを真）[/yellow] -> {conflict_path}"
+        )
     console.print(f"  -> {analysis_path}")
 
 
@@ -1320,8 +1088,22 @@ def run_rdra(
         entity_operations=all_entity_ops,
     )
 
+    # システム境界図（接点＝画面 × 起点＝エンドポイント）を決定的に生成。sync #3
+    from rdra.system_boundary import SystemBoundaryGenerator
+    boundary_mermaid = SystemBoundaryGenerator().generate_mermaid(usecases)
+    boundary_path = output_dir / "rdra" / "system_boundary.md"
+    boundary_path.parent.mkdir(parents=True, exist_ok=True)
+    boundary_path.write_text(
+        "# システム境界図\n\n"
+        "> 接点（画面）× 起点（API エンドポイント）の対応。enrich 照合から決定的に生成"
+        "（派生層・確度=derived、新規生成ではなく既存照合の意味づけ）。\n\n"
+        f"```mermaid\n{boundary_mermaid}\n```\n",
+        encoding="utf-8",
+    )
+
     console.print(f"\n[green]RDRAモデル生成完了[/green]")
     console.print(f"  生成ファイル数: {len(saved_files)}")
+    console.print(f"  システム境界図: {boundary_path}")
     console.print(f"  インデックス: {output_dir}/rdra/index.md")
 
 
@@ -1416,68 +1198,6 @@ def run_gap(
 
     console.print(f"\n[green]CRUDギャップ分析完了[/green]")
     console.print(f"  出力ファイル: {output_path}")
-
-
-@app.command("e2e")
-def run_e2e(
-    input_file: Optional[Path] = typer.Option(
-        None, "--input", "-i", help="パート1の出力JSONファイル"
-    ),
-    output_dir: Optional[Path] = typer.Option(
-        None, "--output", "-o", help="出力ディレクトリ"
-    ),
-    base_url: Optional[str] = typer.Option(
-        None, "--url", "-u", help="テスト対象のベースURL"
-    ),
-    headless: bool = typer.Option(
-        True, "--headless/--no-headless", help="ヘッドレスモード"
-    ),
-    scenario_filter: Optional[str] = typer.Option(
-        None, "--filter", "-f", help="実行するシナリオIDのプレフィックス（例: UC-001）"
-    ),
-    normal_only: bool = typer.Option(
-        False, "--normal-only", help="正常系シナリオのみ実行"
-    ),
-):
-    """
-    パート4: E2Eテスト実行
-
-    操作シナリオをPlaywrightで自動実行する。
-    エラー時はエージェントループでリカバリーを試みる。
-    """
-    _print_header("パート4: E2Eテスト実行")
-
-    config = _get_config()
-    output_dir = output_dir or Path(config.output_dir) / "e2e"
-
-    if base_url:
-        config.e2e_base_url = base_url
-    config.e2e_headless = headless
-
-    input_file = input_file or (config.output_dir / "usecases" / "analysis_result.json")
-    if not input_file.exists():
-        console.print("[yellow]解析結果が見つかりません。先に 'analyze' コマンドを実行してください。[/yellow]")
-        raise typer.Exit(1)
-
-    data = json.loads(Path(input_file).read_text(encoding="utf-8"))
-    _, scenarios = _load_analysis_result(data)
-
-    if scenario_filter:
-        scenarios = [s for s in scenarios if s.usecase_id.startswith(scenario_filter)]
-        console.print(f"フィルター適用: {scenario_filter} -> {len(scenarios)}件")
-
-    if normal_only:
-        scenarios = [s for s in scenarios if s.scenario_type == "normal"]
-        console.print(f"正常系のみ: {len(scenarios)}件")
-
-    llm = _get_llm()
-
-    from e2e.scenario_executor import ScenarioExecutor
-    executor = ScenarioExecutor(llm)
-    results = executor.run_all(scenarios, Path(output_dir))
-
-    console.print(f"\n[green]E2Eテスト完了[/green]")
-    console.print(f"  結果: {output_dir}/e2e_results.md")
 
 
 def _build_viewer(output_dir: Path) -> str:
@@ -1726,12 +1446,6 @@ def run_all(
     output_dir: Optional[Path] = typer.Option(
         None, "--output", "-o", help="出力ディレクトリ"
     ),
-    skip_e2e: bool = typer.Option(
-        False, "--skip-e2e", help="E2Eテストをスキップ"
-    ),
-    base_url: Optional[str] = typer.Option(
-        None, "--url", "-u", help="E2EテストのベースURL"
-    ),
     parallel: int = typer.Option(
         0, "--parallel", "-j",
         help="リポジトリ並列度（0=自動: min(4, リポ数)、1=直列）"
@@ -1740,8 +1454,8 @@ def run_all(
     """
     全パートを順番に実行する。
 
-    パート1 -> パート2 -> パート3 -> パート4 の順に実行。
-    E2Eテストをスキップする場合は --skip-e2e を指定。
+    パート1（解析・UC抽出・画面分析）-> パート2（RDRAモデル）-> パート3（CRUDギャップ）。
+    E2E 実行は loop-e2e へ委譲済み（スコープ外）。
     """
     _print_header("RDRA Analyzer - 全パート実行")
 
@@ -1778,20 +1492,6 @@ def run_all(
     # パート3: CRUDギャップ分析
     console.print("\n" + "=" * 60)
     run_gap.callback(repo=repo, input_file=None, output_dir=output_dir)
-
-    # パート4: E2Eテスト
-    if not skip_e2e:
-        console.print("\n" + "=" * 60)
-        run_e2e.callback(
-            input_file=None,
-            output_dir=output_dir / "e2e",
-            base_url=base_url,
-            headless=True,
-            scenario_filter=None,
-            normal_only=True,
-        )
-    else:
-        console.print("\n[yellow]E2Eテストをスキップしました[/yellow]")
 
     console.print("\n" + "=" * 60)
     console.print(f"\n[bold green]全パート完了[/bold green]")

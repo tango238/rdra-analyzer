@@ -18,6 +18,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Optional
 
+from confidence import INFERRED, coerce
+from .conflict_report import Conflict
 from .scenario_builder import OperationScenario, OperationStep
 from .usecase_extractor import Usecase
 
@@ -338,6 +340,7 @@ def _synthesize_usecase(
         priority="medium",
         related_controllers=facts.controllers,
         related_views=facts.components,
+        confidence=INFERRED,  # 合成UC: コード証拠で確定していない。sync #2
     )
 
 
@@ -357,6 +360,58 @@ def resolve_usecase(
         return uc, None
     new_uc = _synthesize_usecase(entry, facts, counter)
     return new_uc, new_uc
+
+
+def _entry_actors(entry: PendingEntry) -> list[str]:
+    return _dedupe(
+        [str(s.get("actor", "")).strip() for s in entry.steps if str(s.get("actor", "")).strip()]
+    )
+
+
+def detect_conflicts(
+    entry: PendingEntry, uc: Usecase, checkpoint: dict
+) -> list[Conflict]:
+    """既存 UC にマッチした実績が UC 宣言と矛盾するかを決定的に判定する。
+
+    コードを真とし UC は変更しない。検出した矛盾を「要調査」として返す。
+    誤検出を抑えるため、根拠が明確な2種のみ判定する:
+    - actor_mismatch: 実績ステップのアクターが UC 宣言アクターと一致しない。
+    - controller_mismatch: 実績ルートが checkpoint で解決するコントローラが
+      UC の related_controllers と1つも重ならない（別ハンドラを叩いている）。
+    """
+    conflicts: list[Conflict] = []
+
+    actors = _entry_actors(entry)
+    if uc.actor and actors and uc.actor not in actors:
+        conflicts.append(
+            Conflict(
+                usecase_id=uc.id,
+                kind="actor_mismatch",
+                detail=f"UC 宣言アクター「{uc.actor}」と実績アクター {actors} が不一致",
+                code_value=uc.actor,
+                actual_value=", ".join(actors),
+            )
+        )
+
+    facts = _collect_facts(entry, checkpoint)
+    if facts.controllers and not any(
+        c in uc.related_controllers for c in facts.controllers
+    ):
+        conflicts.append(
+            Conflict(
+                usecase_id=uc.id,
+                kind="controller_mismatch",
+                detail=(
+                    "実績が叩いたエンドポイントは "
+                    f"{facts.controllers} に解決するが、UC の関連コントローラは "
+                    f"{uc.related_controllers} で重ならない"
+                ),
+                code_value=", ".join(uc.related_controllers),
+                actual_value=", ".join(facts.controllers),
+            )
+        )
+
+    return conflicts
 
 
 def pending_to_scenario(entry: PendingEntry, usecase: Usecase) -> OperationScenario:
@@ -392,6 +447,7 @@ class ReconcileResult:
     new_usecases: list[Usecase]
     linked: int
     created: int
+    conflicts: list[Conflict] = field(default_factory=list)  # 要調査（コードを真）。sync #4
 
 
 def _load_usecases(analysis: dict) -> list[Usecase]:
@@ -412,6 +468,7 @@ def _load_usecases(analysis: dict) -> list[Usecase]:
                 priority=u.get("priority", "medium"),
                 related_controllers=u.get("related_controllers", []),
                 related_views=u.get("related_views", []),
+                confidence=coerce(u.get("confidence")),
             )
         )
     return out
@@ -433,6 +490,7 @@ def reconcile(analysis: dict, pending: dict, checkpoint: dict) -> ReconcileResul
     entries = [PendingEntry.from_dict(e) for e in pending.get("pending", [])]
     working = list(usecases)
     reconciled, new_usecases = [], []
+    conflicts: list[Conflict] = []
     linked = created = 0
 
     for entry in entries:
@@ -446,9 +504,11 @@ def reconcile(analysis: dict, pending: dict, checkpoint: dict) -> ReconcileResul
             created += 1
         else:
             linked += 1
+            # 既存 UC にマッチ＝静的で確定。実績との矛盾を要調査として記録（コードを真）
+            conflicts.extend(detect_conflicts(entry, uc, checkpoint))
         reconciled.append(pending_to_scenario(entry, uc))
 
-    return ReconcileResult(reconciled, new_usecases, linked, created)
+    return ReconcileResult(reconciled, new_usecases, linked, created, conflicts)
 
 
 def _usecase_to_dict(uc: Usecase) -> dict:
@@ -466,6 +526,7 @@ def _usecase_to_dict(uc: Usecase) -> dict:
         "related_views": uc.related_views,
         "category": uc.category,
         "priority": uc.priority,
+        "confidence": uc.confidence,
     }
 
 
