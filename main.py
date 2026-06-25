@@ -597,8 +597,8 @@ def run_analyze(
     # ユースケース抽出（画面分析結果を活用）
     if skip_llm:
         console.print("[yellow]LLM呼び出しをスキップします[/yellow]")
-        from extraction.usecase_extractor import UsecaseExtractor
-        extractor = UsecaseExtractor(None)
+        from extraction.usecase_extractor import UseCaseExtractor
+        extractor = UseCaseExtractor(None)
         usecases = extractor._fallback_extraction(routes)
         usecases = extractor._assign_ids(extractor._deduplicate(usecases))
     else:
@@ -627,8 +627,8 @@ def run_analyze(
             console.print("[dim]LLMでユースケースを抽出中...[/dim]")
             if screen_specs:
                 console.print(f"  [dim]画面仕様 {len(screen_specs)}件をコンテキストに含めます[/dim]")
-            from extraction.usecase_extractor import UsecaseExtractor
-            extractor = UsecaseExtractor(llm, project_context=project_context_text)
+            from extraction.usecase_extractor import UseCaseExtractor
+            extractor = UseCaseExtractor(llm, project_context=project_context_text)
 
             # バッチ処理を手動で行い、中間ログ出力
             context = extractor._build_context(
@@ -838,7 +838,7 @@ def run_enrich(
     """
     _print_header("ユースケース related_* 補完 (enrich)")
     from extraction.source_parser import ParsedRoute, ParsedPage
-    from extraction.usecase_extractor import UsecaseExtractor
+    from extraction.usecase_extractor import UseCaseExtractor
     from reconciliation.reconcile import _usecase_to_dict
     from extraction.source_parser import from_checkpoint_dict
 
@@ -871,7 +871,7 @@ def run_enrich(
         f"  UC: {len(usecases)}件 | routes: {len(routes)}件 | pages: {len(pages)}件"
     )
 
-    extractor = UsecaseExtractor(None)
+    extractor = UseCaseExtractor(None)
     extractor._enrich_controllers(usecases, routes)
     extractor._enrich_pages(usecases, pages)
 
@@ -1084,7 +1084,7 @@ def run_rdra(
     console.print(f"  -> エンティティ: {len(entities)}件 | リレーション: {len(relationships)}件")
 
     # ユースケース複合図・アクティビティ図・状態遷移図・ビジネスポリシーの生成と保存
-    from visualization.usecase_diagram import UsecaseDiagramGenerator
+    from visualization.usecase_diagram import UseCaseDiagramGenerator
     from visualization.activity_diagram import ActivityDiagramGenerator
     from extraction.derived.state_transition import StateTransitionGenerator
     from extraction.derived.business_policy import BusinessPolicyExtractor
@@ -1098,7 +1098,7 @@ def run_rdra(
 
     renderer = MermaidRenderer(
         info_model_gen=info_gen,
-        usecase_diagram_gen=UsecaseDiagramGenerator(llm),
+        usecase_diagram_gen=UseCaseDiagramGenerator(llm),
         activity_diagram_gen=ActivityDiagramGenerator(),
         state_transition_gen=state_gen,
         business_policy_ext=bp_ext,
@@ -1234,11 +1234,11 @@ def _build_viewer(output_dir: Path) -> str:
     import re
     from extraction.derived.information_model import InformationModelGenerator
     from visualization.mermaid_renderer import MermaidRenderer
-    from visualization.usecase_diagram import UsecaseDiagramGenerator
+    from visualization.usecase_diagram import UseCaseDiagramGenerator
     from visualization.activity_diagram import ActivityDiagramGenerator
     from extraction.derived.state_transition import StateTransitionGenerator, EntityStateMachine, StateTransition
     from extraction.derived.business_policy import BusinessPolicy
-    from extraction.usecase_extractor import UsecaseExtractor
+    from extraction.usecase_extractor import UseCaseExtractor
     from extraction.source_parser import ParsedModel, ParsedRoute
 
     # ---- ユースケース・シナリオ読み込み ----
@@ -1259,7 +1259,7 @@ def _build_viewer(output_dir: Path) -> str:
         pages = [from_checkpoint_dict(ParsedPage, p) for p in cp.get("pages", [])]
 
     # コントローラー・ページ紐付け（related_controllers / related_views / related_pages）
-    _extractor = UsecaseExtractor(None)
+    _extractor = UseCaseExtractor(None)
     _extractor._enrich_controllers(usecases, routes)
     _extractor._enrich_pages(usecases, pages)
 
@@ -1362,7 +1362,7 @@ def _build_viewer(output_dir: Path) -> str:
     groups = info_gen.group_by_usecase(entities, relationships, usecases)
     if groups:
         mermaid_sources["information_model_grouped"] = info_gen.to_mermaid_grouped(groups)
-    uc_gen = UsecaseDiagramGenerator(None)
+    uc_gen = UseCaseDiagramGenerator(None)
     mermaid_sources["usecase_diagram"] = uc_gen.generate_mermaid(usecases)
     mermaid_sources["usecase_conditions"] = uc_gen.generate_conditions_mermaid(usecases)
     for uc in usecases:
@@ -1533,11 +1533,11 @@ def _load_analysis_result(data: dict):
     """
     JSONデータからユースケースと操作シナリオを復元する。
     """
-    from extraction.usecase_extractor import Usecase
+    from extraction.usecase_extractor import UseCase
     from shared.scenario_builder import OperationScenario, OperationStep
 
     usecases = [
-        Usecase(
+        UseCase(
             id=u["id"],
             name=u["name"],
             actor=u["actor"],

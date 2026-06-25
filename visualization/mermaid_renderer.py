@@ -8,10 +8,10 @@ import json
 from pathlib import Path
 from datetime import datetime
 
-from extraction.usecase_extractor import Usecase
+from extraction.usecase_extractor import UseCase
 from shared.scenario_builder import OperationScenario
 from extraction.derived.information_model import Entity, Relationship, InformationGroup, InformationModelGenerator
-from visualization.usecase_diagram import UsecaseDiagramGenerator
+from visualization.usecase_diagram import UseCaseDiagramGenerator
 from visualization.activity_diagram import ActivityDiagramGenerator
 from extraction.derived.state_transition import StateTransitionGenerator, EntityStateMachine
 from extraction.derived.business_policy import BusinessPolicyExtractor, BusinessPolicy
@@ -37,7 +37,7 @@ class MermaidRenderer:
     def __init__(
         self,
         info_model_gen: InformationModelGenerator,
-        usecase_diagram_gen: UsecaseDiagramGenerator,
+        usecase_diagram_gen: UseCaseDiagramGenerator,
         activity_diagram_gen: ActivityDiagramGenerator,
         state_transition_gen: StateTransitionGenerator = None,
         business_policy_ext: BusinessPolicyExtractor = None,
@@ -54,7 +54,7 @@ class MermaidRenderer:
         self,
         entities: list[Entity],
         relationships: list[Relationship],
-        usecases: list[Usecase],
+        usecases: list[UseCase],
         scenarios: list[OperationScenario],
         output_dir: Path,
         routes: list = None,
@@ -164,7 +164,7 @@ class MermaidRenderer:
         self,
         entities: list[Entity],
         relationships: list[Relationship],
-        usecases: list[Usecase],
+        usecases: list[UseCase],
         scenarios: list[OperationScenario],
         groups: list[InformationGroup],
         state_machines: list[EntityStateMachine],
@@ -384,7 +384,7 @@ class MermaidRenderer:
         return str(file_path)
 
     def _render_usecase_diagram(
-        self, usecases: list[Usecase], rdra_dir: Path
+        self, usecases: list[UseCase], rdra_dir: Path
     ) -> str:
         """ユースケース複合図のMarkdownファイルを生成する"""
         mermaid_content = self._uc_diagram_gen.generate_mermaid(usecases)
@@ -414,7 +414,7 @@ class MermaidRenderer:
         return str(file_path)
 
     def _render_usecase_conditions(
-        self, usecases: list[Usecase], rdra_dir: Path
+        self, usecases: list[UseCase], rdra_dir: Path
     ) -> str:
         """ユースケース条件図のMarkdownファイルを生成する"""
         mermaid_content = self._uc_diagram_gen.generate_conditions_mermaid(usecases)
@@ -556,7 +556,7 @@ class MermaidRenderer:
     def _render_index(
         self,
         entities: list[Entity],
-        usecases: list[Usecase],
+        usecases: list[UseCase],
         scenarios: list[OperationScenario],
         all_files: list[str],
         rdra_dir: Path,
@@ -614,7 +614,7 @@ class MermaidRenderer:
 
 """
         # カテゴリ別に整理
-        categories: dict[str, list[Usecase]] = {}
+        categories: dict[str, list[UseCase]] = {}
         for uc in usecases:
             categories.setdefault(uc.category, []).append(uc)
 

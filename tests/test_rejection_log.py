@@ -12,10 +12,10 @@ from extraction.rejection_log import (
     partition_usecases,
     rejected_to_dict,
 )
-from extraction.usecase_extractor import Usecase
+from extraction.usecase_extractor import UseCase
 
 
-def _uc(uc_id: str = "UC-001", **kw) -> Usecase:
+def _uc(uc_id: str = "UC-001", **kw) -> UseCase:
     base = dict(
         id=uc_id,
         name="商品を登録する",
@@ -29,7 +29,7 @@ def _uc(uc_id: str = "UC-001", **kw) -> Usecase:
         category="商品管理",
     )
     base.update(kw)
-    return Usecase(**base)  # type: ignore[arg-type]
+    return UseCase(**base)  # type: ignore[arg-type]
 
 
 class TestEvidence:

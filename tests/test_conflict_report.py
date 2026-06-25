@@ -6,10 +6,10 @@ reconcile で既存 UC にマッチした実績が UC の宣言と食い違う�
 
 from reconciliation.conflict_report import Conflict, conflict_to_dict, load_conflicts
 from reconciliation.reconcile import PendingEntry, detect_conflicts, reconcile
-from extraction.usecase_extractor import Usecase
+from extraction.usecase_extractor import UseCase
 
 
-def _uc(**kw) -> Usecase:
+def _uc(**kw) -> UseCase:
     base = dict(
         id="UC-001",
         name="注文を確定する",
@@ -24,7 +24,7 @@ def _uc(**kw) -> Usecase:
         related_controllers=["OrderController"],
     )
     base.update(kw)
-    return Usecase(**base)  # type: ignore[arg-type]
+    return UseCase(**base)  # type: ignore[arg-type]
 
 
 class TestActorMismatch:

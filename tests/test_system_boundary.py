@@ -4,11 +4,11 @@
 enrich の照合結果（related_pages/related_views/related_routes）から決定的に生成する（LLM 不要）。
 """
 
-from extraction.usecase_extractor import Usecase
+from extraction.usecase_extractor import UseCase
 from extraction.derived.system_boundary import SystemBoundaryGenerator
 
 
-def _uc(**kw) -> Usecase:
+def _uc(**kw) -> UseCase:
     base = dict(
         id="UC-001",
         name="注文を確定する",
@@ -22,7 +22,7 @@ def _uc(**kw) -> Usecase:
         category="注文管理",
     )
     base.update(kw)
-    return Usecase(**base)  # type: ignore[arg-type]
+    return UseCase(**base)  # type: ignore[arg-type]
 
 
 class TestSystemBoundary:

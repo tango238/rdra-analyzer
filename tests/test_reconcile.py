@@ -14,7 +14,7 @@ from reconciliation.reconcile import (
     route_key_equals,
     validate,
 )
-from extraction.usecase_extractor import Usecase
+from extraction.usecase_extractor import UseCase
 
 
 def _uc(id, **kw):
@@ -33,7 +33,7 @@ def _uc(id, **kw):
         related_views=[],
     )
     base.update(kw)
-    return Usecase(id=id, **base)
+    return UseCase(id=id, **base)
 
 
 # --------------------------------------------------------------------------- #

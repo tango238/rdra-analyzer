@@ -22,7 +22,7 @@ from shared.confidence import DERIVED, INFERRED, coerce
 from reconciliation.conflict_report import Conflict
 from extraction.rejection_log import RejectedUsecase
 from shared.scenario_builder import OperationScenario, OperationStep
-from extraction.usecase_extractor import Usecase
+from extraction.usecase_extractor import UseCase
 
 _METHOD_RE = re.compile(
     r"^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS|ANY)\s+", re.IGNORECASE
@@ -204,7 +204,7 @@ def _dedupe(items) -> list:
     return out
 
 
-def _usecase_route_keys(uc: Usecase) -> list[RouteKey]:
+def _usecase_route_keys(uc: UseCase) -> list[RouteKey]:
     return [
         normalize_route(r)
         for r in (list(uc.related_routes) + list(uc.related_pages))
@@ -212,8 +212,8 @@ def _usecase_route_keys(uc: Usecase) -> list[RouteKey]:
 
 
 def match_existing_usecase(
-    entry: PendingEntry, usecases: list[Usecase]
-) -> Optional[Usecase]:
+    entry: PendingEntry, usecases: list[UseCase]
+) -> Optional[UseCase]:
     """loop-e2e と同一のルート照合（nav exact > api exact > nav prefix > api prefix）。"""
     nav_keys = _nav_route_keys(entry)
     nav = nav_keys[0] if nav_keys else None
@@ -292,8 +292,8 @@ def _collect_facts(entry: PendingEntry, checkpoint: dict) -> ReconcileFacts:
 
 
 def _find_uc_by_facts(
-    usecases: list[Usecase], facts: ReconcileFacts
-) -> Optional[Usecase]:
+    usecases: list[UseCase], facts: ReconcileFacts
+) -> Optional[UseCase]:
     for uc in usecases:
         if facts.controllers and any(
             c in uc.related_controllers for c in facts.controllers
@@ -317,7 +317,7 @@ def _find_uc_by_facts(
 
 def _synthesize_usecase(
     entry: PendingEntry, facts: ReconcileFacts, counter: int
-) -> Usecase:
+) -> UseCase:
     name = (
         facts.components[0]
         if facts.components
@@ -327,7 +327,7 @@ def _synthesize_usecase(
     related_pages = facts.pages or (
         [entry.frontend_url] if entry.frontend_url else []
     )
-    return Usecase(
+    return UseCase(
         id=f"UC-LE-{counter:03d}",
         name=name or entry.loop_e2e_id,
         actor=actor,
@@ -347,10 +347,10 @@ def _synthesize_usecase(
 
 def resolve_usecase(
     entry: PendingEntry,
-    usecases: list[Usecase],
+    usecases: list[UseCase],
     checkpoint: dict,
     counter: int,
-) -> tuple[Usecase, Optional[Usecase]]:
+) -> tuple[UseCase, Optional[UseCase]]:
     """(usecase, 新規生成したUC or None) を返す。"""
     uc = match_existing_usecase(entry, usecases)
     if uc:
@@ -370,7 +370,7 @@ def _entry_actors(entry: PendingEntry) -> list[str]:
 
 
 def detect_conflicts(
-    entry: PendingEntry, uc: Usecase, checkpoint: dict
+    entry: PendingEntry, uc: UseCase, checkpoint: dict
 ) -> list[Conflict]:
     """既存 UC にマッチした実績が UC 宣言と矛盾するかを決定的に判定する。
 
@@ -415,7 +415,7 @@ def detect_conflicts(
     return conflicts
 
 
-def pending_to_scenario(entry: PendingEntry, usecase: Usecase) -> OperationScenario:
+def pending_to_scenario(entry: PendingEntry, usecase: UseCase) -> OperationScenario:
     steps = [
         OperationStep(
             step_no=s.get("step_no", i + 1),
@@ -445,18 +445,18 @@ def pending_to_scenario(entry: PendingEntry, usecase: Usecase) -> OperationScena
 @dataclass
 class ReconcileResult:
     reconciled: list[OperationScenario]
-    new_usecases: list[Usecase]
+    new_usecases: list[UseCase]
     linked: int
     created: int
     conflicts: list[Conflict] = field(default_factory=list)  # 要調査（コードを真）。sync #4
-    rescued: list[Usecase] = field(default_factory=list)  # 棄却UCを実績で再昇格。sync #1 follow-on
+    rescued: list[UseCase] = field(default_factory=list)  # 棄却UCを実績で再昇格。sync #1 follow-on
 
 
-def _load_usecases(analysis: dict) -> list[Usecase]:
+def _load_usecases(analysis: dict) -> list[UseCase]:
     out = []
     for u in analysis.get("usecases", []):
         out.append(
-            Usecase(
+            UseCase(
                 id=u["id"],
                 name=u.get("name", ""),
                 actor=u.get("actor", ""),
@@ -476,7 +476,7 @@ def _load_usecases(analysis: dict) -> list[Usecase]:
     return out
 
 
-def _max_le_num(usecases: list[Usecase]) -> int:
+def _max_le_num(usecases: list[UseCase]) -> int:
     nums = []
     for u in usecases:
         m = re.match(r"^UC-LE-(\d+)$", u.id)
@@ -506,7 +506,7 @@ def reconcile(
     working = list(usecases)
     reconciled, new_usecases = [], []
     conflicts: list[Conflict] = []
-    rescued: list[Usecase] = []
+    rescued: list[UseCase] = []
     linked = created = 0
 
     for entry in entries:
@@ -534,7 +534,7 @@ def reconcile(
     return ReconcileResult(reconciled, new_usecases, linked, created, conflicts, rescued)
 
 
-def _usecase_to_dict(uc: Usecase) -> dict:
+def _usecase_to_dict(uc: UseCase) -> dict:
     return {
         "id": uc.id,
         "name": uc.name,
