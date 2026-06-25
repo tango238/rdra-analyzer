@@ -100,10 +100,10 @@
 | 棄却ログ | `RejectedUsecase` / `rejection_log.py` | ✅ |
 | 矛盾 | `Conflict` / `conflict_report.py` | ✅ |
 | 業務フロー（状態） | `ProposedFlow`/`ReviewingFlow`/`NeedsRevisionFlow`/`ApprovedFlow`/`HandedOffFlow` | ✅（sync #5 で登録・workflows.md フィードバック解消） |
-| ユースケース | `Usecase`（小文字 c） | 🟡 軽微な綴り（`Usecase` vs `UseCase`）。コード現状を許容 |
+| ユースケース | `UseCase` | ✅（sync #7 で `Usecase`→`UseCase` 統一） |
 | システム境界 | `SystemBoundaryGenerator` | ✅（Projection＝生成器のみ） |
 
 ## 未解決の問い
 
-- `Usecase` vs `UseCase` の綴り統一（コード広範のため #7 リファクタ時に検討）。
-- 救済（rescue）の正式英名と配線（#1 follow-on）。
+- ~~`Usecase` vs `UseCase` の綴り統一~~ → ✅ sync #7 で `UseCase` に統一。
+- 救済（rescue）の正式英名（実装は reconcile に配線済・#1 follow-on）。

@@ -111,28 +111,26 @@
 | ③ 業務フロー協働 | **PdM 承認ループ** | `workflow/` に実装（ES＋状態機械＋guard＋`rdra flow` CLI）。PdM のみ承認・承認後のみ loop-e2e 引き渡し（PL 成果物） | ✅ 実装済み（sync #5） |
 | ④ 可視化 | Mermaid / ビューワー | `viewer_template.py`, `mermaid_renderer.py` | ✅ 実装済み |
 
-### BC ↔ コードモジュール対応（sync 後 / contexts --analyze）
+### BC ↔ コードパッケージ対応（sync #7 後 = BC 整合）
 
-> 6 BC はすべてコードに存在し概念構造は健全。ただし**パッケージは技術レイヤで切られ BC を横断**する。
+> 6 BC はすべてコードに存在。**sync #7 でパッケージを BC 境界へ整合**（`analyzer/`・`rdra/`・`gap/` を解消）。
 
-| BC | コードモジュール |
+| BC | コードパッケージ |
 |----|-----------------|
-| ① 確定層 | `analyzer/`: `usecase_extractor`・`source_parser`・`screen_analyzer` |
-| ① 派生層 | `rdra/`: `information_model`・`state_transition`・`business_policy`・`crud_matrix`・`system_boundary`(#3) ＋ `gap/crud_analyzer` |
-| ① Precision/棄却 | `analyzer/rejection_log`(#1) |
-| ① 確度（横断 kernel） | `confidence.py`（top-level, #2） |
-| ② 実績調停（ACL） | `analyzer/`: `reconcile`・`conflict_report`(#4)・`scenario_builder`(共有型) |
-| ③ 業務フロー協働 | `rdra/activity_diagram`（一方向のみ・承認ループ無し） |
-| ④ 可視化 | `rdra/`: `mermaid_renderer`・`viewer_template`・`usecase_diagram` |
-| LLM 抽象（Generic） | `llm/` |
-| プロジェクトコンテキスト構築（Generic） | `analyzer/project_context`・`knowledge/loader` |
+| ① 確定層 | `extraction/`: `usecase_extractor`・`source_parser`・`screen_analyzer`・`rejection_log`(#1) |
+| ① 派生層 | `extraction/derived/`: `information_model`・`state_transition`・`business_policy`・`crud_matrix`・`system_boundary`(#3)・`crud_analyzer` |
+| ② 実績調停（ACL） | `reconciliation/`: `reconcile`・`conflict_report`(#4) |
+| ③ 業務フロー協働 | `workflow/`: ES＋状態機械＋guard＋CLI（#5） |
+| ④ 可視化 | `visualization/`: `mermaid_renderer`・`viewer_template`・`usecase_diagram`・`activity_diagram` |
+| Shared Kernel | `shared/`: `confidence`(#2)・`scenario_builder`（`OperationScenario` 型） |
+| Generic | `llm/`（LLM 抽象）・`context/`（`project_context`＋`knowledge`） |
 
-**🔴 構造ズレ（#7 を定量化）**: `analyzer/` が **3 BC**（①確定層・②実績調停・Generic）にまたがり、`rdra/` も **3 BC**（①派生層・③業務フロー・④可視化）にまたがる。`gap/` は ①派生層の生成器1個だけが孤立。sync 新規モジュールも技術レイヤ慣習に従い #7 を強化したが、`confidence.py`（top-level 共有 kernel）と `conflict_report`→`analyzer/`（②に正しく同居）は妥当配置。**`scenario_builder` の `OperationScenario` 型は ①/②/④ が横断利用＝`confidence` と並ぶ Shared Kernel 候補**。
+**✅ 構造ズレ解消（#7）**: 旧 `analyzer/`（3 BC 横断）・`rdra/`（3 BC 横断）・`gap/`（孤立）を上記 BC パッケージへ移動。Shared Kernel（`confidence`＋`scenario_builder`）を `shared/` に集約。`Usecase`→`UseCase` 綴り統一。全 157 passed。
 
 ### 設計が切ったのにコードに残るもの（要撤去・整理）
 
 - ~~`scenarios` / `verify` / `e2e` コマンドが main.py に残存~~ → ✅ **sync #6 で撤去**（コマンド＋`scenario_verifier`/`e2e/`/playwright を削除、`all` を再配線）。`scenario_builder` は analyze/rdra/gap/reconcile が依存する共有型のため存置。
-- コード実体の継ぎ目は **Source / UseCase / Scenario / Reconciliation** の4分割で、設計の継ぎ目とズレている。→ 🟡 Scenario context は `scenario_builder` 型のみへ縮小（#6）。残る 4 BC への横断リファクタ（#7）は **Phase 4 mapping の関係種別確定が前提**で deferred。BC 整合の目標構成: `extraction/`・`reconciliation/`・`workflow/`・`visualization/`・`shared/`（confidence+scenario_builder）・`llm/`・`context/`。
+- ~~コード実体の継ぎ目が設計とズレている~~ → ✅ **sync #7 で BC 整合パッケージへ移行済**（`extraction/`・`reconciliation/`・`workflow/`・`visualization/`・`shared/`・`llm/`・`context/`）。`Usecase`→`UseCase` 統一。別 PR `refactor/bc-aligned-packages`。
 
 ### `--analyze` から導かれる作業の北極星（sync 進捗）
 
