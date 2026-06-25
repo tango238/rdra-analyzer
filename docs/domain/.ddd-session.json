@@ -1,0 +1,117 @@
+{
+  "currentPhase": "workflows",
+  "completedPhases": ["discover", "storming", "contexts", "mapping", "aggregates", "events", "workflows"],
+  "lastUpdated": "2026-06-25",
+  "analyzeApplied": ["contexts", "storming", "contexts-resync"],
+  "openQuestions": [
+    "救済フロー: 静的棄却UC＋loop-e2e実績あり→再昇格の所有者は②(ACL内)か棄却ログ集約のメソッドか（sync #1 follow-on / Phase 9）",
+    "抽出本体(usecase_extractor)でのコード証拠照合フィルタ（現状アンカーはLLM出力依存）（sync #1残）",
+    "Shared Kernel(analysis_result.json)のスキーマ版管理者は①単独か共同か（Phase 6）",
+    "④可視化はConformistでよいかOpen Host(ビューワーAPI)化の余地（将来）",
+    "業務フローAggregateの永続化形式と承認操作の置き場(CLI/ビューワー)（#5・Phase 9-11）"
+  ],
+  "decisions": [
+    "Core = RDRA要求モデル抽出（抽出の正確さが競争優位）",
+    "ユーザーはPdM。判断はPdM側、ツールは正確なモデル供給に専念",
+    "正確性(Precision)最優先：根拠なき抽出は棄却、棄却ログ＋検証フローで見える化",
+    "矛盾時はコードを真（静的抽出 vs loop-e2e実績のコア判断基準）",
+    "スコープ外: E2E実行, scenarios, テスト作成。残す: reconcile（実績取り込み）",
+    "証拠の連鎖: APIエンドポイント→Controller→モデル＋画面突き合わせ→UC候補",
+    "システム境界 = 接点(画面)×起点(APIエンドポイント)の対応。enrich照合の副産物",
+    "確定は2種類: UC/エンティティ=コード証拠(自動) / 業務フロー=PdM承認(人間)",
+    "業務フロー責務: 生成＋PdM承認まで。承認済みをloop-e2eへ引き渡し",
+    "BC構成(4+2): 要求モデル抽出(Core,確定層+派生層統合) / 実績調停(Supporting/ACL) / 業務フロー協働(Supporting) / 可視化(Supporting) / LLM抽象(Generic) / プロジェクトコンテキスト構築(Generic)",
+    "最小コア抽出物=UC+エンティティ(確定層)。派生層=情報モデル/状態遷移/BP/システム境界/CRUDギャップ(確度ラベル必須)",
+    "モデルはto-be(目標)。Precision/棄却ログ/確度ラベル/業務フロー承認ループ/システム境界/矛盾検出は未実装の北極星",
+    "コード現状はRecall寄り(全保持・新規synthesize)。設計のPrecision寄りと逆だが目標として維持",
+    "コード残存物(scenarios/verify/e2e)は将来撤去対象",
+    "sync: 全差異の権威=model(コードがモデルに追いつく方向)で確定。論点はスコープと順序",
+    "sync推奨順序: #2確度ラベル→#1棄却ログ→#4矛盾検出(基盤依存)。#6撤去は独立。#3/#5/#7は後続",
+    "sync第1セッション: 台帳とplanのみ固定。実装はユーザー承認後に着手",
+    "確度ラベル値域: 三値(confirmed/derived/inferred)で確定(sync #2実装)",
+    "棄却ログ: 独立型RejectedUsecaseで確定(sync #1実装)。Precision棄却はanalyze --strictでopt-in段階移行",
+    "contexts --analyze(sync後): 6BC全てコードに存在。但しパッケージ(analyzer/rdra/gap)は技術レイヤ切りでBC横断(#7)。analyzer=3BC, rdra=3BC",
+    "Shared Kernel候補: confidence.py(top-level)とscenario_builderのOperationScenario型(①/②/④横断)。#7のshared/に集約予定",
+    "#7のBC整合目標構成: extraction/reconciliation/workflow/visualization/shared/llm/context(Phase 4 mapping確定後)",
+    "mapping確定: loop-e2eは双方向別契約(②へ実績PL上流 / ③から承認済みフローPL下流)、両方ともPublished Language",
+    "mapping確定: ①⇔②はShared Kernel(analysis_result.json+confidence+OperationScenario型)。Partnershipでなく共有を小さく限定",
+    "mapping確定: R4 loop-e2e→②はPublished Language+②にACL(normalize_routeがspec同一実装)。R2 LLM→①/③はACL(provider抽象)。R1/R5/R7はC-S",
+    "#7の前提解除: 関係種別確定によりshared/(Shared Kernel)・reconciliation/にACL閉じ込め・PLスキーマを公開境界へ、で計画可能(destructive=承認ゲート前提)",
+    "aggregates確定: 振る舞いAggregate=UseCase/Entity/OperationScenario/BusinessFlow/AnalysisSession。Audit Aggregate=RejectedUsecase(①)/Conflict(②)を独立",
+    "aggregates確定: システム境界+派生層(情報モデル/状態遷移/BP/CRUDギャップ)はProjection/Read Model(集約でない・所有者なし・確度derived・再生成可能)",
+    "aggregates確定: UseCase中核不変条件=確定UC⇔コード証拠アンカー存在(#1を集約ルール化)。Rule3(id参照)はrelated_*が文字列で既達",
+    "aggregates確定: コードは関数型スタイル(dataclass+純粋関数)でAnemic違反でなくDMMF整合。不変条件はPhase10でSmart Constructor/型化が目標",
+    "events確定: 受け渡しはEnrichment(イベントにデータ同梱)。Audit系(RejectedUsecase/Conflict)は既にrecord=ペイロード一致でenrich済み",
+    "events確定: Event Sourcingは業務フロー(#5)のみ採用(PdM承認履歴は再生成不可)。UC/Entity/Projectionは再生成で不採用、棄却ログ/矛盾はappend-onlyログで十分",
+    "events確定: 命名は和文過去形⇄英PascalCase過去形(Phase10)。occurredOnは全イベント必須だが現状は関数実行に暗黙化(実体化はto-be)",
+    "workflows確定: Phase9は業務フロー承認ループ(③/#5)のみ詳細設計。抽出①/調停②は実装済みで後追い--analyze",
+    "workflows確定: ステージ=状態型(ProposedFlow→ReviewingFlow⇄NeedsRevisionFlow→ApprovedFlow→HandedOffFlow)。handOffはApprovedFlow型のみに生やし不正状態を表現不能に",
+    "workflows確定: コマンド=(状態,入力,依存)→Result<Event,Error>。guard純粋・依存は関数引数(DI無)・副作用は両端(LoadFlowEvents/AppendFlowEvent/HandOffToLoopE2e)",
+    "workflows確定: 次はPhase10 typesで状態型/Result/Status/エラー階層を型化→syncでworkflow/をTDD実装(fold純粋性・guard不変条件テスト先行)"
+  ],
+  "divergences": [
+    {
+      "id": 1,
+      "fromPhase": "contexts",
+      "type": "gap",
+      "authority": "model",
+      "decision": "コード証拠アンカーなきUCをpartition_usecasesで棄却しrejection_log.jsonへ(独立RejectedUsecase型)。analyze --strictでopt-in(既定はRecall維持)。112 passed。救済フローは残課題。未コミット",
+      "status": "done",
+      "commit": null
+    },
+    {
+      "id": 2,
+      "fromPhase": "contexts",
+      "type": "gap",
+      "authority": "model",
+      "decision": "抽出物にconfidence三値(confirmed/derived/inferred)を付与。confidence.py新設+Usecase/EntityOperationにフィールド追加+reconcile合成UCはinferred。104 passed。未コミット",
+      "status": "done",
+      "commit": null
+    },
+    {
+      "id": 3,
+      "fromPhase": "contexts",
+      "type": "gap",
+      "authority": "model",
+      "decision": "rdra/system_boundary.py: 接点(画面)×起点(エンドポイント)を決定的にMermaid出力(system_boundary.md)。LLM不要=確度derived。rdraコマンドに追加。126 passed。未コミット",
+      "status": "done",
+      "commit": null
+    },
+    {
+      "id": 4,
+      "fromPhase": "contexts",
+      "type": "gap",
+      "authority": "model",
+      "decision": "conflict_report.py+detect_conflictsでマッチUCと実績のactor/controller不一致をconflict_report.jsonへ(コードを真・UC不変・別レポート)。120 passed。未コミット",
+      "status": "done",
+      "commit": null
+    },
+    {
+      "id": 5,
+      "fromPhase": "contexts",
+      "type": "gap",
+      "authority": "model",
+      "decision": "業務フロー協働BC(PdM承認ループ)の新規構築。最大・新規・状態管理。Phase 5(集約)/9-11(型・ワークフロー)のモデル設計が前提のためdeferred(syncで先行実装すると設計負債)",
+      "status": "deferred",
+      "commit": null
+    },
+    {
+      "id": 6,
+      "fromPhase": "contexts",
+      "type": "cleanup",
+      "authority": "model",
+      "decision": "scenarios/verify/e2eコマンド削除(331行)+scenario_verifier/e2e/playwright撤去+allを再配線。scenario_builderは中核共有型(analyze/rdra/gap/reconcile依存)で存置。126 passed。未コミット(staged削除)",
+      "status": "done",
+      "commit": null
+    },
+    {
+      "id": 7,
+      "fromPhase": "contexts",
+      "type": "structure",
+      "authority": "model",
+      "decision": "コードの継ぎ目を4 BC境界へ寄せる横断リファクタ。#6完了でScenario contextはscenario_builder型のみへ縮小。残る横断移動はPhase 4 mappingの関係種別確定が前提でdeferred",
+      "status": "deferred",
+      "commit": null
+    }
+  ]
+}
