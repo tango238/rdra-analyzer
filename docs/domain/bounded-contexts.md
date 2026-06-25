@@ -108,7 +108,7 @@
 | ① 派生層 | **システム境界の生成** | `rdra/system_boundary.py`：接点（画面）× 起点（エンドポイント）を決定的に Mermaid 出力（`rdra/system_boundary.md`）。LLM 不要＝確度 derived | ✅ 実装済み（sync #3） |
 | ② 実績調停 | 「コードを真」の調停 | `reconcile.py`: route match → checkpoint 事実確認 → synthesize。コードが勝つ | ✅ 実装済み（部分） |
 | ② 実績調停 | **矛盾検出 ＋ 要調査フラグ** | `conflict_report.py`＋`detect_conflicts`：マッチ UC と実績の actor/controller 不一致を `conflict_report.json` へ（コードを真・UC 不変） | ✅ 実装済み（sync #4） |
-| ③ 業務フロー協働 | **PdM 承認ループ** | 丸ごと未実装。`activity_diagram.py` は 100% 自動生成、承認ゲートなし | 🔴 未実装（目標） |
+| ③ 業務フロー協働 | **PdM 承認ループ** | `workflow/` に実装（ES＋状態機械＋guard＋`rdra flow` CLI）。PdM のみ承認・承認後のみ loop-e2e 引き渡し（PL 成果物） | ✅ 実装済み（sync #5） |
 | ④ 可視化 | Mermaid / ビューワー | `viewer_template.py`, `mermaid_renderer.py` | ✅ 実装済み |
 
 ### BC ↔ コードモジュール対応（sync 後 / contexts --analyze）

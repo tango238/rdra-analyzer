@@ -19,12 +19,12 @@
 | 2 | contexts | gap | model | 抽出物に確度ラベル（`confidence` 三値）を付与。確定/派生/推論を区別 | **done**（未コミット） | — |
 | 3 | contexts | gap | model | システム境界図の生成（接点＝画面 × 起点＝エンドポイントの対応）。決定的・LLM 不要。`rdra` 出力に追加 | **done**（未コミット） | — |
 | 4 | storming/contexts | gap | model | reconcile に矛盾検出＋要調査フラグ。マッチ UC と実績の actor/controller 不一致を別レポートへ（コードを真・UC 不変） | **done**（未コミット） | — |
-| 5 | storming/contexts | gap | model | 業務フロー協働 BC（PdM 承認ループ）の新規構築 | pending | — |
+| 5 | storming/contexts | gap | model | 業務フロー協働 BC（PdM 承認ループ）を `workflow/` に新規構築。ES＋状態機械＋guard＋CLI | **done**（コミット済） | cf3ca09…42958f0 |
 | 6 | contexts | cleanup | model | `scenarios`/`verify`/`e2e` コマンド＋`scenario_verifier`/`e2e/`/playwright を撤去。`scenario_builder` は共有型として存置 | **done**（未コミット） | — |
 | 7 | contexts | structure | model | コードの継ぎ目（Source/UseCase/Scenario/Reconciliation）を設計の BC 境界へ寄せる | pending | — |
 
 > 状態凡例: `pending → planned → in-progress → done`（または `model-updated` / `deferred`）。
-> 進捗: **#2 / #1 / #4 / #3 / #6 = done（未コミット）**。#5 / #7 = deferred（それぞれ Phase 5/9–11・Phase 4 mapping のモデル決定が前提）。全 126 passed。
+> 進捗: **#2 / #1 / #4 / #3 / #6 / #5 = done**（#5 は `workflow/` 新規実装・コミット済、他は feat コミット `67b3fde`）。**#7 = deferred**（Phase 4 mapping は完了済だが横断リファクタは別途・破壊的＝承認ゲート）。全 **154 passed**。
 
 ---
 
@@ -120,8 +120,9 @@
   - **影響ファイル**: 新規 `workflow/`（協働 BC 一式：状態機械＋永続化）、`main.py`（新サブコマンド群）、可視化連携。
   - **リスク**: **高**。新規・状態管理・対話。Phase 5（集約）/ Phase 9–11（型・ワークフロー）の設計を先に固めるべき。
   - **スコープ外**: テスト作成・E2E 実行（loop-e2e へ委譲＝BC 境界を越えない、[event-storming.md](event-storming.md) 赤付箋）。
-- **実装結果**: 未着手。**先に Phase 5/9–11 を通すことを推奨**（sync 単独で着手すると設計負債）。
-- **モデル再整合**: [bounded-contexts.md](bounded-contexts.md) L111 の 🔴。実装時に Phase 5 集約設計へ出戻り。
+- **採用設計**: Phase 5/6/9/10 を先に通し、その型骨格（`docs/domain/code/`）を `workflow/` へ実装。ES（append-only JSONL ＋ 純粋 `fold`）＋状態機械（状態別 OR 型）＋ guard（PdM のみ承認・承認後のみ引き渡し）＋ CLI（`rdra flow ...`）。
+- **実装結果**: ✅ 完了（TDD 4 増分）。`workflow/`（result/events/state/errors/commands/store/service）＋ `flow` サブコマンド。新規テスト 28（state7+commands12+store4+service5）/ 全 **154 passed**。CLI で end-to-end 検証（PdM-only guard が System 承認を拒否、PdM 承認→loop-e2e PL 成果物 `*.handoff.json` 出力）。コミット `cf3ca09`(ES core)→`ffb0e22`(commands)→`9ddf476`(store)→`42958f0`(service+CLI)。
+- **モデル再整合**: ✅ [bounded-contexts.md](bounded-contexts.md) L111 の 🔴 を「実装済み」へ、[event-storming.md](event-storming.md) E 節（22–28）を実装注記へ。`LoadConfirmedUsecases` は #2 の confidence でフィルタ。救済フロー（#1 follow-on）と loop-e2e 実送信は引き続き残（artifact 出力で代替）。
 
 ### #6 スコープ外コマンドの撤去（scenarios / verify / e2e）— 独立・破壊的
 

@@ -57,7 +57,7 @@
       "authority": "model",
       "decision": "コード証拠アンカーなきUCをpartition_usecasesで棄却しrejection_log.jsonへ(独立RejectedUsecase型)。analyze --strictでopt-in(既定はRecall維持)。112 passed。救済フローは残課題。未コミット",
       "status": "done",
-      "commit": null
+      "commit": "67b3fde"
     },
     {
       "id": 2,
@@ -66,7 +66,7 @@
       "authority": "model",
       "decision": "抽出物にconfidence三値(confirmed/derived/inferred)を付与。confidence.py新設+Usecase/EntityOperationにフィールド追加+reconcile合成UCはinferred。104 passed。未コミット",
       "status": "done",
-      "commit": null
+      "commit": "67b3fde"
     },
     {
       "id": 3,
@@ -75,7 +75,7 @@
       "authority": "model",
       "decision": "rdra/system_boundary.py: 接点(画面)×起点(エンドポイント)を決定的にMermaid出力(system_boundary.md)。LLM不要=確度derived。rdraコマンドに追加。126 passed。未コミット",
       "status": "done",
-      "commit": null
+      "commit": "67b3fde"
     },
     {
       "id": 4,
@@ -84,16 +84,16 @@
       "authority": "model",
       "decision": "conflict_report.py+detect_conflictsでマッチUCと実績のactor/controller不一致をconflict_report.jsonへ(コードを真・UC不変・別レポート)。120 passed。未コミット",
       "status": "done",
-      "commit": null
+      "commit": "67b3fde"
     },
     {
       "id": 5,
       "fromPhase": "contexts",
       "type": "gap",
       "authority": "model",
-      "decision": "業務フロー協働BC(PdM承認ループ)の新規構築。最大・新規・状態管理。Phase 5(集約)/9-11(型・ワークフロー)のモデル設計が前提のためdeferred(syncで先行実装すると設計負債)",
-      "status": "deferred",
-      "commit": null
+      "decision": "業務フロー協働BC(PdM承認ループ)をworkflow/に新規実装。ES(append-only JSONL+純粋fold)+状態機械(状態別OR型)+guard(PdMのみ承認/承認後のみ引き渡し)+rdra flow CLI。Phase 5/6/9/10の設計を実装に。154 passed。end-to-end検証済(PdM-only guard動作)",
+      "status": "done",
+      "commit": "42958f0"
     },
     {
       "id": 6,
@@ -102,7 +102,7 @@
       "authority": "model",
       "decision": "scenarios/verify/e2eコマンド削除(331行)+scenario_verifier/e2e/playwright撤去+allを再配線。scenario_builderは中核共有型(analyze/rdra/gap/reconcile依存)で存置。126 passed。未コミット(staged削除)",
       "status": "done",
-      "commit": null
+      "commit": "67b3fde"
     },
     {
       "id": 7,

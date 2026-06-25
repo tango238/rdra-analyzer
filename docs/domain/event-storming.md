@@ -116,7 +116,7 @@
 | 15 | コードと実績の矛盾が検出された 🎯 | **#4** `detect_conflicts`／`conflict_report.json` | ✅（sync #4） |
 | 16 | システム境界が特定された | **#3** `rdra/system_boundary.py`（`system_boundary.md`） | ✅（sync #3） |
 | 17–21 | 情報モデル／状態遷移／BP／CRUDギャップ／ビューワー | 各ジェネレータ（`rdra/`・`gap/`・`viewer`） | ✅ |
-| 22–28 | 業務フロー協働（想定→レビュー→FB→再想定→編集→承認→引き渡し） | `activity_diagram.py` は一方向自動生成、承認ゲートなし | 🔴 全GAP（sync #5 deferred） |
+| 22–28 | 業務フロー協働（想定→レビュー→FB→再想定→編集→承認→引き渡し） | `workflow/`：ES（fold）＋状態機械＋guard＋`rdra flow` CLI。各イベントを JSONL 追記、承認は PdM のみ | ✅ 実装済み（sync #5） |
 
 ### Aggregate → コード
 
