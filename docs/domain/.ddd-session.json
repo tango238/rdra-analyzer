@@ -1,13 +1,28 @@
 {
-  "currentPhase": "glossary",
-  "completedPhases": ["discover", "storming", "contexts", "mapping", "aggregates", "events", "workflows", "types", "sync", "glossary"],
-  "lastUpdated": "2026-06-25",
-  "analyzeApplied": ["contexts", "storming", "contexts-resync"],
+  "currentPhase": "mapping",
+  "completedPhases": [
+    "discover",
+    "storming",
+    "contexts",
+    "mapping",
+    "aggregates",
+    "events",
+    "workflows",
+    "types",
+    "sync",
+    "glossary"
+  ],
+  "lastUpdated": "2026-06-26",
+  "analyzeApplied": [
+    "contexts",
+    "storming",
+    "contexts-resync"
+  ],
   "openQuestions": [
     "抽出本体(usecase_extractor)でのコード証拠照合フィルタ（現状アンカーはLLM出力依存）（sync #1残）",
     "Shared Kernel(analysis_result.json)のスキーマ版管理者は①単独か共同か（Phase 6）",
-    "④可視化はConformistでよいかOpen Host(ビューワーAPI)化の余地（将来）",
-    "業務フローAggregateの永続化形式と承認操作の置き場(CLI/ビューワー)（#5・実装はJSONL+CLIで確定、ビューワーは将来）"
+    "業務フローAggregateの永続化形式と承認操作の置き場(CLI/ビューワー)（#5・実装はJSONL+CLIで確定、ビューワーは将来）",
+    "@rdra/viewer: 契約rdra-view-model.jsonを正式スキーマ固定するか暗黙契約か / JSON出力をどのコマンドに載せるか(viewer --export-only|rdra追加出力|新規export) / npm配布形態 / mermaidをCDNかオフライン同梱か"
   ],
   "decisions": [
     "Core = RDRA要求モデル抽出（抽出の正確さが競争優位）",
@@ -55,7 +70,11 @@
     "loop-e2e実送信は設計上のPL成果物(*.handoff.json)で完了とみなす: 統合はファイルベースPublished Language(inbound pending.jsonと対称)。ネットワーク呼出はBC境界(loop-e2eへ委譲)を越えるため作らない",
     "ユーザー指示(全部): 救済+loop-e2e送信は本PRで完了。#7構造リファクタ+Usecase綴り統一は別PRで対応(本PR完了後)",
     "#7完了(別PR refactor/bc-aligned-packages): 7パッケージへBC整合(extraction/derived/reconciliation/visualization/shared/context+workflow/llm)。移行手順=相対import絶対化→git mv→パス一括書換→解消パッケージ削除。157 passed",
-    "sync全完了: #1-#7すべてdone。台帳クローズ。本PR(feat/rdra-precision-and-ddd)=#1-#6+救済、別PR(refactor/bc-aligned-packages)=#7"
+    "sync全完了: #1-#7すべてdone。台帳クローズ。本PR(feat/rdra-precision-and-ddd)=#1-#6+救済、別PR(refactor/bc-aligned-packages)=#7",
+    "discover(再訪): ビューワーを別npm CLI @rdra/viewer に切り出す。位置づけ=Supporting(rdra出力専用・汎用化せず)。境界=完成形view-model JSON(rdra-view-model.json=現行DATA+mermaid_sources)。集計/レイアウトロジックは現状維持(Core側再導出もクライアントJSも不変)、唯一の新規はDATAのJSON直列化工程。npm側はdumb renderer(解析ゼロ)",
+    "contexts(④分離 formalize): 可視化BCを別npm @rdra/viewer に分離=1BC1デプロイ。言語境界の事実=④はCoreのユビキタス言語をそのまま描くConformistな読み取り射影で独自モデル無→ACL不要。②(loop-e2e外部言語をnormalize_routeで翻訳=ACLあり)と要否が逆。同一オーナー・rdra専用ゆえ公開APIでなく内部契約",
+    "mapping(R7 formalize): ①→④/@rdra/viewer = Customer-Supplier + 内部Published Language。契約=rdra-view-model.json(現行DATA+mermaid_sources+generated_at+schemaVersion)。ファイルベースPL(loop-e2e PLと同型)・サービス化しない。下流Conformist・ACL無・寛容な読み手+schemaVersion major検査。PL是非=内部PL採用(技術境界Python↔Node跨ぎ+独立リリースのためConformist単独は不可)。OHS/公開API化はしない(旧openQuestionクローズ)",
+    "実装(keystone): 表示契約 rdra-view-model.json をCore側で出力する seam を実装。VIEW_MODEL_SCHEMA_VERSION=1.0。DATA形状不変・埋め込みHTMLと同一。viewer --export-only追加。_build_viewerのentity_operations/routes未伝播も修正。残りはnpm @rdra/viewer本体(別repo・配布形態/mermaid同梱要決定)"
   ],
   "divergences": [
     {
@@ -120,6 +139,14 @@
       "decision": "BC整合パッケージへ移行(別PR refactor/bc-aligned-packages): analyzer/rdra/gap解消→extraction(+derived)/reconciliation/visualization/shared/context。Usecase→UseCase統一。死にメソッド(ScenarioVerifier参照)除去。43リネーム検出・157 passed",
       "status": "done",
       "commit": "ca3c6b7"
+    },
+    {
+      "id": 8,
+      "fromPhase": "mapping",
+      "type": "structure",
+      "authority": "model",
+      "decision": "モデル=Viewerを別npm @rdra/viewer(Supporting)に分離。関係はCustomer-Supplier+内部Published Language(rdra-view-model.json+schemaVersion・ファイルベース・下流Conformist・ACL無)。OHS化しない。コード現状は_build_viewer/viewer_template/mermaid_rendererにViewerを内包し表示層なのにCore再導出を抱える。解消=DATA組み立てはCoreに残し出力をrdra-view-model.jsonに直列化した時点を境界に、npm CLIは現行テンプレ+JS移植のdumb renderer。集計/レイアウト不変。実装は将来sync(出力コマンドの載せ方・schema固定方針を計画時確定) [keystone実装済(branch feat/viewer-view-model-export): mermaid_renderer._render_viewerがviewer.htmlと併せてrdra-view-model.json(schemaVersion1.0+generated_at+DATA+mermaid_sources)を出力。埋め込みDATAと同一形状(レイアウト不変)。viewer --export-onlyで配信せず契約のみ出力。_build_viewerがentity_operations/routesを_render_viewerへ未伝播だった既存ギャップも修正(open-pmsでentity_operations 0→63)。新規4テスト・172 passed。未コミット。残=@rdra/viewer npmパッケージ本体(別repo)]",
+      "status": "in-progress"
     }
   ]
 }

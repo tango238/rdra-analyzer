@@ -16,7 +16,7 @@ flowchart LR
     CORE["① 要求モデル抽出<br/>★Core"]
     REC["② 実績調停<br/>(Supporting / ACL)"]
     WF["③ 業務フロー協働<br/>(Supporting)"]
-    VIZ["④ 可視化<br/>(Supporting)"]
+    VIZ["④ 可視化 / @rdra/viewer<br/>(Supporting・別npmパッケージ)"]
 
     PC -->|"C-S: コンテキスト注入"| CORE
     LLM -.->|"ACL: provider 抽象"| CORE
@@ -25,8 +25,8 @@ flowchart LR
     LE ==>|"PL: pending.json + ② に ACL"| REC
     CORE -->|"C-S: 確定UC（#5 未）"| WF
     WF ==>|"PL: 承認済みフロー（#5 未）"| LE
-    CORE -->|"C-S: 抽出物"| VIZ
-    REC -.->|"merged を可視化"| VIZ
+    CORE ==>|"C-S + 内部PL:<br/>rdra-view-model.json<br/>(schemaVersion)・Conformist・ACL無"| VIZ
+    REC -.->|"merge は Core の<br/>view-model 経由で反映"| VIZ
 
     classDef core fill:#fff3e0,stroke:#FF9800,stroke-width:3px
     classDef supporting fill:#e8f5e9,stroke:#2E7D32
@@ -51,8 +51,8 @@ flowchart LR
 | R4 | **loop-e2e（外部）** | ② 実績調停 | **Published Language ＋ ACL** | `loop-e2e-pending.json`（`reconcile` が `normalize_route` で翻訳） | ✅ |
 | R5 | ① 要求モデル抽出 | ③ 業務フロー協働 | Customer-Supplier | 確定 UC 群（同一 `analysis_result.json` 由来） | 🔴 未（#5） |
 | R6 | ③ 業務フロー協働 | **loop-e2e（外部）** | **Published Language** | 承認済み業務フローの引き渡し | 🔴 未（#5） |
-| R7 | ① 要求モデル抽出 | ④ 可視化 | Customer-Supplier | 抽出物（`mermaid_renderer` / `viewer`） | ✅ |
-| R9 | ② 実績調停 | ④ 可視化 | Conformist | merged `analysis_result.json` を可視化 | 🟡 |
+| R7 | ① 要求モデル抽出 | ④ 可視化 / `@rdra/viewer` | **Customer-Supplier ＋ 内部 Published Language**（下流は Conformist・ACL 無） | `rdra-view-model.json`（`schemaVersion` 付き）をファイル受け渡し | 🟡 切り出し計画（divergence #8） |
+| R9 | ② 実績調停 | ④ 可視化 / `@rdra/viewer` | Conformist（間接） | ② の merge は Core の view-model に取り込まれて反映（直接読まない） | 🟡 |
 
 ## 統合の詳細
 
@@ -77,6 +77,18 @@ flowchart LR
 - **関係**: Generic 上流。`llm/provider.py` の抽象インターフェースに Anthropic API / Claude Code CLI が適合。
 - **統合方式**: 消費側 ACL。① は具体プロバイダを知らず provider 抽象にのみ依存＝代替可能（Generic の所以）。
 
+### R7 ① 要求モデル抽出 → ④ 可視化 / `@rdra/viewer` — Customer-Supplier ＋ 内部 Published Language
+- **関係**: ① が上流（view-model 供給）、`@rdra/viewer` が下流。下流は **Conformist**＝Core の語をそのまま描画する読み取り射影で、**独自モデルを持たないため ACL 無**。
+- **流れるデータ**: `rdra-view-model.json` ＝ 現行 `DATA`（`entities`/`relationships`/`usecases`/`scenarios`/`state_machines`/`policies`/`information_groups`/`screen_specs`/`entity_operations`/`uc_entity_crud`）＋ `mermaid_sources` ＋ `generated_at` ＋ **`schemaVersion`**。
+- **統合方式**: **ファイルベース Published Language**（loop-e2e PL R4/R6 と同型）。Core が JSON を吐き、`@rdra/viewer` が `npx rdra-viewer ./rdra-view-model.json` で読み描画・配信。サービス（REST/RPC）ではない。
+- **PL 是非の判断（本セッションで確定）**: **内部 PL 化を採用**。
+  - 理由1: 契約が **Python（Core）↔ Node/npm（viewer）の技術境界**を跨ぎ、独立リリース・独立進化する（`npx` で別途インストール）。Conformist 単独（無契約追従）は同一ビルドで安く再同期できる場合のみ成立し、本件は当てはまらない。
+  - 理由2: 既存アーキの一貫性。クロスシステムのファイル契約は全て PL（loop-e2e `pending.json`/`handoff`）。view-model もこれに揃える。
+  - 理由3: discovery の Opportunity（独立リリース）を実現し、Threat（暗黙スキーマ固定化で両者破損）を `schemaVersion` で緩和。
+- **公開範囲**: **内部 PL に留める（Open Host Service／公開 API 化はしない）**。同一オーナー・rdra 出力専用（Supporting）。"内部仕様で可"（discovery）と矛盾せず、ただ**バージョン付きの共有スキーマ**にする、の意。
+- **下流の防御**: 寛容な読み手（未知キーは無視）＋ `schemaVersion` の major 不一致時のみ明示エラー。
+- **状態**: 🟡 divergence #8（model 権威・pending）。実装は将来の sync。
+
 ## #7（コード構造リファクタ）への含意
 
 関係種別が確定したことで sync #7 の前提が外れた。Shared Kernel（R3+R8）と Published Language（R4/R6）が
@@ -93,9 +105,12 @@ flowchart LR
 
 - **loop-e2e は単一の関係ではなく双方向の別契約**: ② への上流（実績 PL）と ③ からの下流（承認済みフロー PL）。同じ外部システムだが BC ごとに役割が反転する。
 - **① と ② は対等な Partnership ではなく Shared Kernel**: Core↔Supporting の非対称があり、共有を `analysis_result.json` ＋少数の型に限定して結合を管理する方が健全。
+- **④ 可視化と ② 実績調停は「同じ Supporting でも ACL 要否が逆」**: ② は外部 loop-e2e の言語を翻訳するため ACL あり。④ は Core の語をそのまま描く読み取り射影のため ACL 無。`@rdra/viewer` 分離でこの差が物理パッケージ境界として顕在化する。
+- **PL は「公開 API」ではなく「跨ぎ境界のバージョン付き共有スキーマ」**: `@rdra/viewer` は内部 PL（同一オーナー・rdra専用）で十分。Open Host Service 化（公開ビューワーAPI）は不要 ＝ 旧 openQuestion をクローズ。
 
 ## 未解決の問い
 
 - Shared Kernel（`analysis_result.json`）のスキーマ所有者は ① か、共同管理か（Phase 5/6 で版管理方針）。
-- ④ 可視化は Conformist でよいか、Open Host（ビューワー API）化する余地はあるか（将来）。
+- ~~④ 可視化は Conformist でよいか、Open Host（ビューワー API）化する余地はあるか~~ → ✅ **確定**: 下流 Conformist のまま、統合は**内部 Published Language（`rdra-view-model.json` ＋ `schemaVersion`）**。**OHS／公開 API 化はしない**（R7 詳細参照）。実装は divergence #8（将来 sync）。
 - R5/R6（③ 業務フロー協働の PL）は #5 実装時に具体化（Phase 5/9–11 後）。
+- `rdra-view-model.json` の出力工程をどのコマンドに載せるか（`viewer --export-only` / `rdra` 追加出力 / 新規 `export`）は sync #8 計画時に確定（discovery 未解決と同一）。
