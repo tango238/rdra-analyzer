@@ -1250,13 +1250,14 @@ def _build_viewer(output_dir: Path) -> str:
 
     # ---- チェックポイントからモデル・ルート読み込み ----
     cp_path = output_dir / "usecases" / "_checkpoint.json"
-    models, routes, pages = [], [], []
+    models, routes, pages, entity_operations = [], [], [], []
     if cp_path.exists():
         cp = json.loads(cp_path.read_text(encoding="utf-8"))
-        from extraction.source_parser import ParsedPage, from_checkpoint_dict
+        from extraction.source_parser import ParsedPage, EntityOperation, from_checkpoint_dict
         models = [from_checkpoint_dict(ParsedModel, m) for m in cp.get("models", [])]
         routes = [from_checkpoint_dict(ParsedRoute, r) for r in cp.get("routes", [])]
         pages = [from_checkpoint_dict(ParsedPage, p) for p in cp.get("pages", [])]
+        entity_operations = [from_checkpoint_dict(EntityOperation, op) for op in cp.get("entity_operations", [])]
 
     # コントローラー・ページ紐付け（related_controllers / related_views / related_pages）
     _extractor = UseCaseExtractor(None)
@@ -1401,6 +1402,8 @@ def _build_viewer(output_dir: Path) -> str:
         policies=policies, mermaid_sources=mermaid_sources,
         rdra_dir=rdra_dir,
         screen_specs=screen_specs,
+        entity_operations=entity_operations,
+        routes=routes,
     )
     return viewer_path
 
@@ -1419,16 +1422,37 @@ def run_viewer(
     regenerate: bool = typer.Option(
         False, "--regenerate", "-r", help="ビューワーHTMLを再生成してから起動"
     ),
+    export_only: bool = typer.Option(
+        False, "--export-only",
+        help="サーバーを起動せず、表示契約 rdra-view-model.json（＋viewer.html）の出力のみ行う（@rdra/viewer 連携用）"
+    ),
 ):
     """
     RDRAビューワーをローカルサーバーで起動する。
 
     --regenerate で既存の解析結果からビューワーを再生成してから起動。
+    --export-only で配信せず表示契約 JSON（rdra-view-model.json）の出力のみ行う。
     """
     config = _get_config()
     output_dir = output_dir or config.output_dir
     output_dir = Path(output_dir)
     viewer_path = output_dir / "rdra" / "viewer.html"
+
+    # --export-only: 解析結果から view-model を再生成し、契約 JSON を出力して終了
+    if export_only:
+        console.print("[dim]表示契約 view-model を生成中...[/dim]")
+        try:
+            _build_viewer(output_dir)
+        except FileNotFoundError as e:
+            console.print(f"[red]{e}[/red]")
+            console.print("先に 'python main.py analyze' と 'python main.py rdra' を実行してください。")
+            raise typer.Exit(1)
+        vm_path = output_dir / "rdra" / "rdra-view-model.json"
+        size_kb = vm_path.stat().st_size // 1024 if vm_path.exists() else 0
+        console.print(f"[green]表示契約を出力しました[/green]")
+        console.print(f"  -> {vm_path} ({size_kb}KB)")
+        console.print(f"  @rdra/viewer 連携: npx rdra-viewer {vm_path}")
+        return
 
     if regenerate or not viewer_path.exists():
         console.print("[dim]ビューワーを生成中...[/dim]")

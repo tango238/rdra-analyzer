@@ -176,6 +176,7 @@ const VIEWS = [
   {{key:"info_detail",   label:"エンティティ",     diagram:"information_model"}},
   {{key:"states",        label:"状態遷移図",       diagram:null}},
   {{key:"screens",        label:"画面",             diagram:null}},
+  {{key:"screen_flow",   label:"画面遷移",         diagram:"screen_flow"}},
   {{key:"scenarios",     label:"操作シナリオ",     diagram:null}},
   {{key:"cross_ref",     label:"エンティティ×UC",  diagram:null}},
   {{key:"actor_entity",  label:"アクター×エンティティ", diagram:null}},

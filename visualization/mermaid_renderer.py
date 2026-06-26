@@ -19,6 +19,12 @@ from visualization.viewer_template import generate_viewer_html
 from extraction.derived.crud_matrix import build_uc_entity_crud_index
 
 
+# 表示契約（@rdra/viewer 向け内部 Published Language）のスキーマ版。
+# DATA 形状（キー追加/削除/意味変更）に後方非互換が入ったら major を上げる。
+# 下流（@rdra/viewer）は major 不一致時のみ明示エラー、未知キーは無視（寛容な読み手）。
+VIEW_MODEL_SCHEMA_VERSION = "1.0"
+
+
 class MermaidRenderer:
     """
     RDRA ダイアグラムを Mermaid 記法の Markdown ファイルとして出力するクラス。
@@ -178,6 +184,15 @@ class MermaidRenderer:
         """インタラクティブビューワー HTML を生成する"""
         generated_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
+        # 画面遷移の階層グラフ（画面 × loop-e2e 実走シナリオから決定的に導出）。
+        from extraction.derived.screen_flow import ScreenFlowGenerator
+        mermaid_sources = {
+            **mermaid_sources,
+            "screen_flow": ScreenFlowGenerator().generate_mermaid(
+                screen_specs or [], scenarios or []
+            ),
+        }
+
         # データをJSON化
         data = {
             "entities": [
@@ -287,6 +302,20 @@ class MermaidRenderer:
 
         data_json = json.dumps(data, ensure_ascii=False)
         mermaid_json = json.dumps(mermaid_sources, ensure_ascii=False)
+
+        # 表示契約: @rdra/viewer 向け view-model JSON を viewer.html と併せて出力する。
+        # 埋め込み DATA と完全に同一形状（data）に schemaVersion / generated_at /
+        # mermaid_sources を付した内部 Published Language。Core はこれを吐くだけ、
+        # 切り出し後の @rdra/viewer はこの JSON のみを入力に描画する（dumb renderer）。
+        view_model = {
+            "schemaVersion": VIEW_MODEL_SCHEMA_VERSION,
+            "generated_at": generated_at,
+            **data,
+            "mermaid_sources": mermaid_sources,
+        }
+        (rdra_dir / "rdra-view-model.json").write_text(
+            json.dumps(view_model, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
 
         html = generate_viewer_html(
             project_name="RDRA Analysis",

@@ -14,6 +14,7 @@ venv/
 
 # Output
 output/
+output-*/
 
 # IDE
 .idea/
