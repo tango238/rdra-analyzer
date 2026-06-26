@@ -184,6 +184,15 @@ class MermaidRenderer:
         """インタラクティブビューワー HTML を生成する"""
         generated_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
+        # 画面遷移の階層グラフ（画面 × loop-e2e 実走シナリオから決定的に導出）。
+        from extraction.derived.screen_flow import ScreenFlowGenerator
+        mermaid_sources = {
+            **mermaid_sources,
+            "screen_flow": ScreenFlowGenerator().generate_mermaid(
+                screen_specs or [], scenarios or []
+            ),
+        }
+
         # データをJSON化
         data = {
             "entities": [

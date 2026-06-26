@@ -59,7 +59,9 @@ class TestViewModelExport:
         vm = json.loads(_render(tmp_path).read_text(encoding="utf-8"))
         assert vm["schemaVersion"] == VIEW_MODEL_SCHEMA_VERSION
         assert "generated_at" in vm
-        assert vm["mermaid_sources"] == {"information_model": "erDiagram\n"}
+        # 入力の mermaid_sources は温存され、派生図 screen_flow が追加される
+        assert vm["mermaid_sources"]["information_model"] == "erDiagram\n"
+        assert "screen_flow" in vm["mermaid_sources"]
 
     def test_view_model_carries_all_data_keys(self, tmp_path) -> None:
         vm = json.loads(_render(tmp_path).read_text(encoding="utf-8"))
