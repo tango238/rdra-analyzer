@@ -36,6 +36,7 @@ class OperationScenario:
     variations: list[str]           # バリエーション（入力値のパターンなど）
     frontend_url: str = ""          # 対応するフロントエンドURL
     api_endpoint: str = ""          # 主に使用するAPIエンドポイント
+    provenance: str = ""            # 出所印（loop-e2e/reconcile = ②が正規調停で書いた）。空=静的抽出
 
 
 class ScenarioBuilder:

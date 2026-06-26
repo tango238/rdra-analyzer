@@ -1,9 +1,12 @@
 """reconcile モジュールのテスト"""
 from reconciliation.reconcile import (
+    PROVENANCE_RECONCILE,
     PendingEntry,
     ReconcileResult,
     RouteKey,
+    _scenario_to_dict,
     apply_reconcile,
+    grandfather_le_provenance,
     match_existing_usecase,
     normalize_path,
     normalize_route,
@@ -256,9 +259,17 @@ def test_le_scenarios_preserved_and_non_le_untouched():
 # --------------------------------------------------------------------------- #
 # validate
 # --------------------------------------------------------------------------- #
+def _le(**kw):
+    """provenance 印つきの LE- シナリオ dict（既定で正規通過印を持つ）。"""
+    base = {"scenario_id": "LE-x", "usecase_id": "UC-001",
+            "provenance": PROVENANCE_RECONCILE, "steps": []}
+    base.update(kw)
+    return base
+
+
 def test_validate_detects_dangling_usecase_id():
     bad = {"usecases": [{"id": "UC-001"}],
-           "scenarios": [{"scenario_id": "LE-x", "usecase_id": "UC-999", "steps": []}]}
+           "scenarios": [_le(usecase_id="UC-999")]}
     try:
         validate(bad)
         assert False, "should raise"
@@ -268,10 +279,7 @@ def test_validate_detects_dangling_usecase_id():
 
 def test_validate_detects_duplicate_scenario_id():
     bad = {"usecases": [{"id": "UC-001"}],
-           "scenarios": [
-               {"scenario_id": "LE-x", "usecase_id": "UC-001", "steps": []},
-               {"scenario_id": "LE-x", "usecase_id": "UC-001", "steps": []},
-           ]}
+           "scenarios": [_le(), _le()]}
     try:
         validate(bad)
         assert False, "should raise"
@@ -281,10 +289,89 @@ def test_validate_detects_duplicate_scenario_id():
 
 def test_validate_detects_non_sequential_step_no():
     bad = {"usecases": [{"id": "UC-001"}],
-           "scenarios": [{"scenario_id": "LE-x", "usecase_id": "UC-001",
-                          "steps": [{"step_no": 2}]}]}
+           "scenarios": [_le(steps=[{"step_no": 2}])]}
     try:
         validate(bad)
         assert False, "should raise"
     except ValueError as e:
         assert "連番" in str(e)
+
+
+# --------------------------------------------------------------------------- #
+# provenance ハードガード（reconcile を LE- の唯一の書き手にする）
+# --------------------------------------------------------------------------- #
+def test_pending_to_scenario_stamps_provenance():
+    sc = pending_to_scenario(PendingEntry(loop_e2e_id="x"), _uc("UC-001"))
+    assert sc.provenance == PROVENANCE_RECONCILE
+
+
+def test_scenario_to_dict_emits_provenance():
+    sc = pending_to_scenario(PendingEntry(loop_e2e_id="x"), _uc("UC-001"))
+    assert _scenario_to_dict(sc)["provenance"] == PROVENANCE_RECONCILE
+
+
+def test_validate_rejects_le_without_provenance():
+    bad = {"usecases": [{"id": "UC-001"}],
+           "scenarios": [{"scenario_id": "LE-x", "usecase_id": "UC-001", "steps": []}]}
+    try:
+        validate(bad)
+        assert False, "should raise"
+    except ValueError as e:
+        assert "provenance" in str(e)
+
+
+def test_validate_rejects_le_with_wrong_provenance():
+    bad = {"usecases": [{"id": "UC-001"}],
+           "scenarios": [{"scenario_id": "LE-x", "usecase_id": "UC-001",
+                          "provenance": "loop-e2e/direct-merge", "steps": []}]}
+    try:
+        validate(bad)
+        assert False, "should raise"
+    except ValueError as e:
+        assert "provenance" in str(e)
+
+
+def test_validate_accepts_le_with_provenance():
+    ok = {"usecases": [{"id": "UC-001"}], "scenarios": [_le()]}
+    validate(ok)  # raises 無し
+
+
+def test_validate_ignores_provenance_for_non_le():
+    # 非 LE-（静的抽出 SC-）は provenance 不要
+    ok = {"usecases": [{"id": "UC-001"}],
+          "scenarios": [{"scenario_id": "SC-001-01", "usecase_id": "UC-001", "steps": []}]}
+    validate(ok)
+
+
+def test_reconcile_output_passes_validate_with_provenance():
+    out = apply_reconcile(_analysis(), reconcile(_analysis(), _pending(), _checkpoint()))
+    validate(out)  # 全 LE- に印があるので通る
+    le = [s for s in out["scenarios"] if s["scenario_id"].startswith("LE-")]
+    assert le and all(s["provenance"] == PROVENANCE_RECONCILE for s in le)
+
+
+# --------------------------------------------------------------------------- #
+# grandfather 移行（旧・直接マージ由来の LE- を一度きりで正規化）
+# --------------------------------------------------------------------------- #
+def test_grandfather_stamps_unstamped_le():
+    legacy = {"usecases": [{"id": "UC-001"}],
+              "scenarios": [
+                  {"scenario_id": "LE-old", "usecase_id": "UC-001", "steps": []},
+                  {"scenario_id": "SC-1", "usecase_id": "UC-001", "steps": []},
+              ]}
+    out = grandfather_le_provenance(legacy)
+    le = next(s for s in out["scenarios"] if s["scenario_id"] == "LE-old")
+    sc = next(s for s in out["scenarios"] if s["scenario_id"] == "SC-1")
+    assert le["provenance"] == PROVENANCE_RECONCILE
+    assert "provenance" not in sc  # 非 LE- は触らない
+    validate(out)  # 移行後は guard を通る
+    # 入力は不変（immutability）
+    assert "provenance" not in legacy["scenarios"][0]
+
+
+def test_grandfather_is_idempotent():
+    legacy = {"usecases": [{"id": "UC-001"}],
+              "scenarios": [{"scenario_id": "LE-old", "usecase_id": "UC-001", "steps": []}]}
+    once = grandfather_le_provenance(legacy)
+    twice = grandfather_le_provenance(once)
+    assert twice == once

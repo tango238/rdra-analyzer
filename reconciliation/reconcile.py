@@ -28,6 +28,10 @@ _METHOD_RE = re.compile(
     r"^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS|ANY)\s+", re.IGNORECASE
 )
 
+# LE- シナリオの正規通過印。② reconcile だけがこの値を書く。印の無い LE- は
+# loop-e2e の直接マージ（ACL バイパス）由来とみなし validate で拒否する（ハードガード）。
+PROVENANCE_RECONCILE = "loop-e2e/reconcile"
+
 
 # --------------------------------------------------------------------------- #
 # ルートキー・正規化（loop-e2e と同一実装）
@@ -436,6 +440,7 @@ def pending_to_scenario(entry: PendingEntry, usecase: UseCase) -> OperationScena
         variations=[],
         frontend_url=entry.frontend_url or "",
         api_endpoint=_first_api_endpoint_str(entry),
+        provenance=PROVENANCE_RECONCILE,  # ②が正規調停で書いた印。validate のハードガードを通す
     )
 
 
@@ -562,6 +567,7 @@ def _scenario_to_dict(sc: OperationScenario) -> dict:
         "scenario_type": sc.scenario_type,
         "frontend_url": sc.frontend_url,
         "api_endpoint": sc.api_endpoint,
+        "provenance": sc.provenance,
         "steps": [
             {
                 "step_no": s.step_no,
@@ -605,7 +611,12 @@ def apply_reconcile(analysis: dict, result: ReconcileResult) -> dict:
 
 
 def validate(analysis: dict) -> None:
-    """参照整合性チェック。失敗時は ValueError（呼び出し側は書き戻さないこと）。"""
+    """参照整合性チェック。失敗時は ValueError（呼び出し側は書き戻さないこと）。
+
+    LE- シナリオは ② reconcile の正規通過印（provenance）を必須とする。印の無い
+    LE- は loop-e2e の直接マージ（ACL バイパス）由来とみなして拒否する（ハードガード）。
+    旧データは grandfather_le_provenance で一度きり移行してから通す。
+    """
     uc_ids = {u.get("id") for u in analysis.get("usecases", [])}
     seen = set()
     for s in analysis.get("scenarios", []):
@@ -613,6 +624,11 @@ def validate(analysis: dict) -> None:
         if sid in seen:
             raise ValueError(f"重複した scenario_id: {sid}")
         seen.add(sid)
+        if str(sid).startswith("LE-") and s.get("provenance") != PROVENANCE_RECONCILE:
+            raise ValueError(
+                f"provenance 印の無い LE- シナリオ（直接マージ由来の疑い・ACLバイパス）: {sid}。"
+                f"reconcile 経由で取り込むか grandfather_le_provenance で移行すること"
+            )
         if s.get("usecase_id") not in uc_ids:
             raise ValueError(
                 f"dangling usecase_id: {s.get('usecase_id')}（scenario {sid}）"
@@ -620,3 +636,18 @@ def validate(analysis: dict) -> None:
         for i, st in enumerate(s.get("steps", [])):
             if st.get("step_no") != i + 1:
                 raise ValueError(f"step_no が連番でない: {sid}")
+
+
+def grandfather_le_provenance(analysis: dict) -> dict:
+    """旧・直接マージ由来の LE- シナリオに正規通過印を一度きりで付与する（移行用）。
+
+    ハードガード導入前から存在する LE- シナリオ（印なし）を救済し、新ルールは
+    以後の書き込みにのみ効かせる。非 LE- シナリオは触らない。冪等・入力は不変。
+    """
+    scenarios = []
+    for s in analysis.get("scenarios", []):
+        if str(s.get("scenario_id")).startswith("LE-") and "provenance" not in s:
+            scenarios.append({**s, "provenance": PROVENANCE_RECONCILE})
+        else:
+            scenarios.append(s)
+    return {**analysis, "scenarios": scenarios}
