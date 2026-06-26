@@ -1,5 +1,5 @@
 {
-  "currentPhase": "mapping",
+  "currentPhase": "sync",
   "completedPhases": [
     "discover",
     "storming",
@@ -16,7 +16,8 @@
   "analyzeApplied": [
     "contexts",
     "storming",
-    "contexts-resync"
+    "contexts-resync",
+    "discover-loop-e2e-channel"
   ],
   "openQuestions": [
     "抽出本体(usecase_extractor)でのコード証拠照合フィルタ（現状アンカーはLLM出力依存）（sync #1残）",
@@ -74,7 +75,8 @@
     "discover(再訪): ビューワーを別npm CLI @rdra/viewer に切り出す。位置づけ=Supporting(rdra出力専用・汎用化せず)。境界=完成形view-model JSON(rdra-view-model.json=現行DATA+mermaid_sources)。集計/レイアウトロジックは現状維持(Core側再導出もクライアントJSも不変)、唯一の新規はDATAのJSON直列化工程。npm側はdumb renderer(解析ゼロ)",
     "contexts(④分離 formalize): 可視化BCを別npm @rdra/viewer に分離=1BC1デプロイ。言語境界の事実=④はCoreのユビキタス言語をそのまま描くConformistな読み取り射影で独自モデル無→ACL不要。②(loop-e2e外部言語をnormalize_routeで翻訳=ACLあり)と要否が逆。同一オーナー・rdra専用ゆえ公開APIでなく内部契約",
     "mapping(R7 formalize): ①→④/@rdra/viewer = Customer-Supplier + 内部Published Language。契約=rdra-view-model.json(現行DATA+mermaid_sources+generated_at+schemaVersion)。ファイルベースPL(loop-e2e PLと同型)・サービス化しない。下流Conformist・ACL無・寛容な読み手+schemaVersion major検査。PL是非=内部PL採用(技術境界Python↔Node跨ぎ+独立リリースのためConformist単独は不可)。OHS/公開API化はしない(旧openQuestionクローズ)",
-    "実装(keystone): 表示契約 rdra-view-model.json をCore側で出力する seam を実装。VIEW_MODEL_SCHEMA_VERSION=1.0。DATA形状不変・埋め込みHTMLと同一。viewer --export-only追加。_build_viewerのentity_operations/routes未伝播も修正。残りはnpm @rdra/viewer本体(別repo・配布形態/mermaid同梱要決定)"
+    "実装(keystone): 表示契約 rdra-view-model.json をCore側で出力する seam を実装。VIEW_MODEL_SCHEMA_VERSION=1.0。DATA形状不変・埋め込みHTMLと同一。viewer --export-only追加。_build_viewerのentity_operations/routes未伝播も修正。残りはnpm @rdra/viewer本体(別repo・配布形態/mermaid同梱要決定)",
+    "divergence#9(R4再整合): loop-e2e→②の取り込みを1系統化。突合は②reconcileの唯一責務とし、loop-e2eは全シナリオをloop-e2e-pending.jsonに出すだけ(UC紐付けしない・analysis_result.jsonに触れない)。ハードガード=provenance印+validate拒否+grandfather移行。スコープ外の赤付箋: UC-005.related_pagesの/plugins汚染(①抽出のRecall寄り副作用)はreconcileでconflict可視化されるのみ、修正は①側の別divergence"
   ],
   "divergences": [
     {
@@ -146,6 +148,14 @@
       "type": "structure",
       "authority": "model",
       "decision": "モデル=Viewerを別npm @rdra/viewer(Supporting)に分離。関係はCustomer-Supplier+内部Published Language(rdra-view-model.json+schemaVersion・ファイルベース・下流Conformist・ACL無)。OHS化しない。コード現状は_build_viewer/viewer_template/mermaid_rendererにViewerを内包し表示層なのにCore再導出を抱える。解消=DATA組み立てはCoreに残し出力をrdra-view-model.jsonに直列化した時点を境界に、npm CLIは現行テンプレ+JS移植のdumb renderer。集計/レイアウト不変。実装は将来sync(出力コマンドの載せ方・schema固定方針を計画時確定) [keystone実装済(branch feat/viewer-view-model-export): mermaid_renderer._render_viewerがviewer.htmlと併せてrdra-view-model.json(schemaVersion1.0+generated_at+DATA+mermaid_sources)を出力。埋め込みDATAと同一形状(レイアウト不変)。viewer --export-onlyで配信せず契約のみ出力。_build_viewerがentity_operations/routesを_render_viewerへ未伝播だった既存ギャップも修正(open-pmsでentity_operations 0→63)。新規4テスト・172 passed。未コミット。残=@rdra/viewer npmパッケージ本体(別repo)] [完了: @rdra/viewer を別repo(/Users/go/work/github/rdra-viewer)に新規作成。Core PR #10(feat/viewer-view-model-export)で契約出力、viewerは template機械抽出+dumb renderer(node --test 10件)。open-pms実データでDATAがPython版と意味的同一・MERMAID完全一致・HTTP200配信を確認。残=npm publish/mermaidオフライン同梱(将来polish)]",
+      "status": "done"
+    },
+    {
+      "id": 9,
+      "fromPhase": "mapping",
+      "type": "mismatch",
+      "authority": "model",
+      "decision": "loop-e2e取り込みを1系統化(R4再整合)。コードはR4に無い迂回路=loop-e2e rdra-exportがルート照合で当たったシナリオをanalysis_result.jsonへ直接マージ(ACLバイパス)していた。発見の起点はopen-pms実データでLE-grow-plugins→UC-005等の誤紐付け(根因はUC-005.related_pagesの/plugins汚染=①抽出側の別件、本件はスコープ外)。解消: (rdra) reconcileが書くLE-にprovenance='loop-e2e/reconcile'印付与+validate()が印無しLE-をValueError拒否(ハードガード)+grandfather_le_provenanceで旧13件を一度きり移行+OperationScenarioにprovenanceフィールド追加。view-model契約(@rdra/viewer)は無影響(schemaVersion1.0据置)。194 passed(新規10)。(loop-e2e) rdraExport.tsを全件pending化、matchUsecase/merge.ts/validate.ts/toOperationScenario/io read+writeAnalysis/orphan型(AnalysisResult/OperationScenario/Usecase/LE_PREFIX)を削除。build+lint緑・578 passed。両README/context-map R4更新。未コミット",
       "status": "done"
     }
   ]

@@ -301,29 +301,35 @@ python main.py enrich
 
 シナリオの源泉・実行・バグ検出は [loop-e2e](https://github.com/tango238/loop-e2e) に一本化し、
 rdra-analyzer は RDRAモデリング・CRUDギャップ・ビューワーに専念する棲み分け。
-loop-e2e の `rdra-export` がルート照合で当たったシナリオは直接 `analysis_result.json` の
-`scenarios[]` にマージされ、当たらなかったものは `loop-e2e-pending.json` に保留される。
-`reconcile` はこの保留分を取り込む。
+loop-e2e の `rdra-export` は**全シナリオ**を `loop-e2e-pending.json` に書き出すだけで、UC への
+紐付け（突合）は一切しない。突合の唯一の調停者は `reconcile`（コンテキストマップ R4・単一入力）。
 
 ```bash
-# 1. (loop-e2e 側) シナリオを rdra に書き出す
+# 1. (loop-e2e 側) 全シナリオを保留ファイルに書き出す（突合しない）
 #    loop-e2e rdra-export --into output/usecases/analysis_result.json
-# 2. (rdra 側) 保留シナリオを取り込む
+# 2. (rdra 側) 保留シナリオを取り込む（ここで突合・事実確認）
 python main.py reconcile
 python main.py reconcile --pending /path/to/loop-e2e-pending.json
 ```
 
 処理内容:
-- 各保留エントリの `navigate_routes` / `api_endpoints` を `_checkpoint.json`（ルート・ページ・
-  コントローラー）でソースに当てて事実確認する。
+- 各保留エントリの `navigate_routes` / `api_endpoints` をまずルート照合し、当たらなければ
+  `_checkpoint.json`（ルート・ページ・コントローラー）でソースに当てて事実確認する。
 - 既存ユースケースに該当すれば紐付け、無ければ新規ユースケース（`UC-LE-NNN`）を生成する。
+  既存UCにマッチしても実績と矛盾（actor/controller 不一致）があれば `conflict_report.json` に
+  「要調査」として可視化する（コードを真・UC は上書きしない）。
 - シナリオは `LE-<id>` の出所タグ付きで取り込み（冪等：再実行しても重複しない）。
-- 書き戻し前に参照整合性（dangling `usecase_id` 無し・`scenario_id` 一意・`step_no` 連番）を
-  検証し、失敗時はファイルを変更しない。
+- `reconcile` が書く LE- シナリオには `provenance="loop-e2e/reconcile"` 印を付与する。
+- 書き戻し前に参照整合性（dangling `usecase_id` 無し・`scenario_id` 一意・`step_no` 連番・
+  **印の無い `LE-` シナリオを拒否**＝直接マージ由来の混入を防ぐハードガード）を検証し、
+  失敗時はファイルを変更しない。
 
 > `LE-` プレフィックスのシナリオは loop-e2e 所有として扱われ、`verify --fix` の修正対象外。
 > ルート正規化（METHODトークン除去・`ANY`ワイルドカード・クエリ/末尾スラッシュ除去）は
 > loop-e2e と同一実装。
+>
+> **旧データの移行**: ハードガード導入前の印なし `LE-` シナリオは
+> `reconciliation.reconcile.grandfather_le_provenance(analysis)` で一度きりスタンプして救済する。
 
 #### gap: CRUDギャップ分析
 
