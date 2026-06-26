@@ -22,9 +22,11 @@
 | 5 | storming/contexts | gap | model | 業務フロー協働 BC（PdM 承認ループ）を `workflow/` に新規構築。ES＋状態機械＋guard＋CLI | **done**（コミット済） | cf3ca09…42958f0 |
 | 6 | contexts | cleanup | model | `scenarios`/`verify`/`e2e` コマンド＋`scenario_verifier`/`e2e/`/playwright を撤去。`scenario_builder` は共有型として存置 | **done**（未コミット） | — |
 | 7 | contexts | structure | model | パッケージを BC 整合へ（extraction/reconciliation/visualization/shared/context）＋ `Usecase`→`UseCase` 統一 | **done**（別PR）ca3c6b7…ea06bc3 | ca3c6b7 |
+| 8 | mapping | structure | model | Viewer を別 npm `@rdra/viewer`（Supporting）へ分離。R7 ＝ C-S ＋内部 PL（`rdra-view-model.json`・schemaVersion） | **done** | PR #10 |
+| 9 | mapping | mismatch | model | loop-e2e 取り込みを **1系統化**（R4 再整合）。突合は ② `reconcile` の唯一責務とし、loop-e2e は全シナリオを `loop-e2e-pending.json` に出すだけ（直接マージ撤去）。ハードガード＝`provenance` 印＋`validate` 拒否＋grandfather 移行 | **done**（未コミット） | — |
 
 > 状態凡例: `pending → planned → in-progress → done`（または `model-updated` / `deferred`）。
-> 進捗: **#1–#7 すべて done**（#5 ＝ `workflow/` 新規実装、#7 ＝ BC 整合パッケージ＋`UseCase` 統一は別 PR `refactor/bc-aligned-packages`）。全 **157 passed**。
+> 進捗: **#1–#9 すべて done**（#5 ＝ `workflow/` 新規実装、#7 ＝ BC 整合パッケージは別 PR、#8 ＝ `@rdra/viewer` 分離 PR #10、#9 ＝ loop-e2e 1系統化）。rdra **194 passed** / loop-e2e **578 passed**。
 
 ---
 
@@ -149,6 +151,17 @@
 - **リスク**: 大（import 連鎖・横断移動）。単独セッションで一気にやらない。
 - **実装結果**: **deferred**（#6 は完了済みで Scenario context は `scenario_builder` 型のみへ縮小。残る横断移動は **Phase 4 mapping の関係種別確定が前提**＝モデル側の決定待ち。sync の原則「モデルの抜けは該当フェーズへ出戻り、勝手に塗りつぶさない」に従い保留）。
 
+### #9 loop-e2e 取り込みの 1系統化（R4 再整合）— mapping・両 repo
+
+- **発見**: open-pms 実データで `LE-grow-plugins → UC-005`（予約参照）等の誤紐付け。起点は「loop-e2e の突合が上手くできていない」という PdM の気づき。
+- **コードの事実（前提を覆す発見）**: context-map **R4 は最初から「`loop-e2e-pending.json` 単一チャネル＋② が ACL」** と規定済み。一方コードは loop-e2e `rdra-export` が**ルート照合で当たったシナリオを `analysis_result.json` に直接マージ**する第2チャネルを持ち、これは **R4 に無い迂回路で ② の ACL（checkpoint 事実確認・矛盾検出）をバイパス**していた。＝逸脱しているのはモデルでなく**コード**。
+- **権威と判断**: **model**。R4 の単一チャネルが正。コードを R4 に追いつかせる。
+- **計画と実装**:
+  - **rdra（②）**: `reconcile` が書く `LE-` に `provenance="loop-e2e/reconcile"` 印を付与（`pending_to_scenario`/`_scenario_to_dict`／`OperationScenario` にフィールド追加）。`validate()` に**印無し `LE-` を `ValueError` 拒否**するハードガードを追加。旧データ救済は `grandfather_le_provenance`（冪等・不変）で一度きりスタンプ。open-pms 実データ 13 件を移行。view-model 契約（@rdra/viewer）は無影響（`schemaVersion 1.0` 据置）。**194 passed**（新規10）。
+  - **loop-e2e（上流）**: `rdraExport.ts` を**全件 pending 化**（`matchUsecase` 分岐・直接マージ撤去、`analysis_result.json` に触れない）。死にコード削除（`match.ts` の突合系・`merge.ts`・`validate.ts`・`toOperationScenario`/`apiEndpointString`・io の analysis read/write・orphan 型 `AnalysisResult`/`OperationScenario`/`Usecase`/`LE_PREFIX`）。build＋lint 緑・**578 passed**。
+- **モデル再整合**: context-map **R4** を単一チャネル＋ハードガードに更新（✅）。両 repo README 更新。divergence #9 登録。
+- **スコープ外（新しい赤付箋）**: `UC-005.related_pages` の `/plugins` 汚染（① 抽出の Recall 寄り副作用）。1系統化では `conflict_report.json` に可視化されるのみ。修正は **① 抽出側の別 divergence**。
+
 ---
 
 ## スコープ外・残課題（新しい赤付箋）
@@ -159,6 +172,8 @@
 - ~~救済フロー（#1 follow-on）~~ → ✅ 実装済み（reconcile が名前一致で再昇格）。
 - ~~loop-e2e 実送信~~ → ✅ **設計上の PL 成果物（`*.handoff.json`）で完了**。統合はファイルベース Published Language（inbound `pending.json` と対称）。ネットワーク呼出は BC 境界（loop-e2e へ委譲）を越えるため作らない。
 - ~~#7 構造リファクタ ＋ `Usecase`→`UseCase` 綴り統一~~ → ✅ **別 PR `refactor/bc-aligned-packages` で実装済**。
+- ~~loop-e2e 取り込みの2系統（直接マージ＋pending）~~ → ✅ **1系統化済（#9）**。突合は ② reconcile に集約。
+- 🔴 **`UC-005.related_pages` の `/plugins` 汚染**（① 抽出の Recall 寄り副作用）— reconcile では矛盾として可視化されるのみ。修正は ① 抽出側の新 divergence（未起票）。
 
 ## #7 実装結果（別 PR）
 

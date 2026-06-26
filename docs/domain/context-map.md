@@ -64,9 +64,11 @@ flowchart LR
 
 ### R4 loop-e2e → ② 実績調停 — Published Language ＋ ACL
 - **関係**: loop-e2e が上流（実績供給）、② が下流。② が腐敗防止層。
-- **流れるデータ**: `loop-e2e-pending.json`（実績シナリオ）。
-- **統合方式**: Published Language（rdra-export スキーマ）。② の `normalize_route` は loop-e2e spec と**同一実装**＝共有言語の翻訳契約。
-- **ACL の役割**: 外部スキーマを内部 `Usecase`/`OperationScenario` へ翻訳し、Core を loop-e2e の変更から隔離。「コードを真」（#4）は ACL 内の調停ルール。
+- **流れるデータ**: `loop-e2e-pending.json`（実績シナリオ）。**単一チャネル**。loop-e2e は全シナリオをここに書き出すだけで UC 紐付け（突合）をしない。
+- **統合方式**: Published Language（rdra-export スキーマ）。突合（ルート照合＋ checkpoint 事実確認＋矛盾検出）は **② の `reconcile` が唯一の調停者**＝ ACL の中核責務。`normalize_route` は loop-e2e spec と同一実装の翻訳契約。
+- **ACL の役割**: 外部スキーマを内部 `UseCase`/`OperationScenario` へ翻訳し、Core を loop-e2e の変更から隔離。「コードを真」（#4）は ACL 内の調停ルール。
+- **ハードガード**: ② が書く `LE-` シナリオに `provenance="loop-e2e/reconcile"` 印を付与し、`validate()` が印の無い `LE-` を拒否する。loop-e2e による `analysis_result.json` 直接マージ（ACL バイパス）を構造的に不能にする（divergence #9）。
+- **状態**: ✅ 単一チャネル化済（divergence #9）。loop-e2e 側 `rdra-export` は全件 pending 化（直接マージ撤去）。
 
 ### R6 ③ 業務フロー協働 → loop-e2e — Published Language（未実装）
 - **関係**: ③ が上流（承認済み業務フロー供給）、loop-e2e が下流（テスト作成・実行）。
