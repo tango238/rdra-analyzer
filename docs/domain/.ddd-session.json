@@ -145,8 +145,8 @@
       "fromPhase": "mapping",
       "type": "structure",
       "authority": "model",
-      "decision": "モデル=Viewerを別npm @rdra/viewer(Supporting)に分離。関係はCustomer-Supplier+内部Published Language(rdra-view-model.json+schemaVersion・ファイルベース・下流Conformist・ACL無)。OHS化しない。コード現状は_build_viewer/viewer_template/mermaid_rendererにViewerを内包し表示層なのにCore再導出を抱える。解消=DATA組み立てはCoreに残し出力をrdra-view-model.jsonに直列化した時点を境界に、npm CLIは現行テンプレ+JS移植のdumb renderer。集計/レイアウト不変。実装は将来sync(出力コマンドの載せ方・schema固定方針を計画時確定) [keystone実装済(branch feat/viewer-view-model-export): mermaid_renderer._render_viewerがviewer.htmlと併せてrdra-view-model.json(schemaVersion1.0+generated_at+DATA+mermaid_sources)を出力。埋め込みDATAと同一形状(レイアウト不変)。viewer --export-onlyで配信せず契約のみ出力。_build_viewerがentity_operations/routesを_render_viewerへ未伝播だった既存ギャップも修正(open-pmsでentity_operations 0→63)。新規4テスト・172 passed。未コミット。残=@rdra/viewer npmパッケージ本体(別repo)]",
-      "status": "in-progress"
+      "decision": "モデル=Viewerを別npm @rdra/viewer(Supporting)に分離。関係はCustomer-Supplier+内部Published Language(rdra-view-model.json+schemaVersion・ファイルベース・下流Conformist・ACL無)。OHS化しない。コード現状は_build_viewer/viewer_template/mermaid_rendererにViewerを内包し表示層なのにCore再導出を抱える。解消=DATA組み立てはCoreに残し出力をrdra-view-model.jsonに直列化した時点を境界に、npm CLIは現行テンプレ+JS移植のdumb renderer。集計/レイアウト不変。実装は将来sync(出力コマンドの載せ方・schema固定方針を計画時確定) [keystone実装済(branch feat/viewer-view-model-export): mermaid_renderer._render_viewerがviewer.htmlと併せてrdra-view-model.json(schemaVersion1.0+generated_at+DATA+mermaid_sources)を出力。埋め込みDATAと同一形状(レイアウト不変)。viewer --export-onlyで配信せず契約のみ出力。_build_viewerがentity_operations/routesを_render_viewerへ未伝播だった既存ギャップも修正(open-pmsでentity_operations 0→63)。新規4テスト・172 passed。未コミット。残=@rdra/viewer npmパッケージ本体(別repo)] [完了: @rdra/viewer を別repo(/Users/go/work/github/rdra-viewer)に新規作成。Core PR #10(feat/viewer-view-model-export)で契約出力、viewerは template機械抽出+dumb renderer(node --test 10件)。open-pms実データでDATAがPython版と意味的同一・MERMAID完全一致・HTTP200配信を確認。残=npm publish/mermaidオフライン同梱(将来polish)]",
+      "status": "done"
     }
   ]
 }
